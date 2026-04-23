@@ -13,15 +13,6 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
-export function formatCompactCurrency(value: number) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-}
-
 export function formatNumber(value: number) {
   return new Intl.NumberFormat("es-AR").format(value);
 }

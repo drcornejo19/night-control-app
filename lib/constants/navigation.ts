@@ -4,11 +4,13 @@ import {
   CalendarRange,
   CreditCard,
   LayoutDashboard,
+  PackagePlus,
   Receipt,
   Settings,
   ShoppingCart,
   Ticket,
   Wallet,
+  ScanLine,
 } from "lucide-react";
 
 export const sidebarItems = [
@@ -62,4 +64,16 @@ export const sidebarItems = [
     href: "/settings",
     icon: Settings,
   },
+
+  {
+  title: "POS",
+  href: "/pos",
+  icon: ScanLine,
+},
+
+{
+  title: "Productos",
+  href: "/products",
+  icon: PackagePlus,
+},
 ];

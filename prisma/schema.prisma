@@ -1,0 +1,307 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////
+// ENUMS
+//////////////////////
+
+enum UserRole {
+  SUPER_ADMIN
+  OWNER
+  MANAGER
+  CASHIER
+  BAR
+  SECURITY
+}
+
+enum NightStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  CARD
+  OTHER
+}
+
+enum SaleType {
+  BAR
+  TICKET
+  VIP
+}
+
+enum ExpenseCategory {
+  STAFF
+  DJ
+  SUPPLIER
+  SERVICES
+  OTHER
+}
+
+enum MovementType {
+  INCOME
+  EXPENSE
+}
+
+//////////////////////
+// CORE MULTI-TENANT
+//////////////////////
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+  sales       Sale[]
+  expenses    Expense[]
+}
+
+model Venue {
+  id        String   @id @default(cuid())
+  name      String
+  city      String?
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+  nights      Night[]
+  products    Product[]
+  suppliers   Supplier[]
+}
+
+model Membership {
+  id      String   @id @default(cuid())
+  userId  String
+  venueId String
+  role    UserRole
+
+  user  User  @relation(fields: [userId], references: [id])
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@unique([userId, venueId])
+}
+
+//////////////////////
+// NIGHT CORE
+//////////////////////
+
+model Night {
+  id       String      @id @default(cuid())
+  venueId  String
+  name     String
+  date     DateTime
+  status   NightStatus @default(OPEN)
+  openedAt DateTime?
+  closedAt DateTime?
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  cashBox   CashBox?
+  sales     Sale[]
+  expenses  Expense[]
+  purchases Purchase[]
+  tickets   TicketSale[]
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////
+// CASH
+//////////////////////
+
+model CashBox {
+  id         String @id @default(cuid())
+  nightId    String @unique
+  opening    Float
+  closing    Float?
+  expected   Float?
+  difference Float?
+
+  night Night @relation(fields: [nightId], references: [id])
+
+  movements CashMovement[]
+
+  createdAt DateTime @default(now())
+}
+
+model CashMovement {
+  id        String       @id @default(cuid())
+  cashBoxId String
+  type      MovementType
+  amount    Float
+  note      String?
+
+  method PaymentMethod?
+
+  cashBox CashBox @relation(fields: [cashBoxId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////
+// SALES
+//////////////////////
+
+model Sale {
+  id      String   @id @default(cuid())
+  nightId String
+  userId  String?
+  type    SaleType
+  total   Float
+
+  night Night @relation(fields: [nightId], references: [id])
+  user  User? @relation(fields: [userId], references: [id])
+
+  items    SaleItem[]
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+}
+
+model SaleItem {
+  id        String @id @default(cuid())
+  saleId    String
+  productId String
+  quantity  Int
+  price     Float
+
+  sale    Sale    @relation(fields: [saleId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id     String        @id @default(cuid())
+  saleId String
+  method PaymentMethod
+  amount Float
+
+  sale Sale @relation(fields: [saleId], references: [id])
+}
+
+//////////////////////
+// PRODUCTS & STOCK
+//////////////////////
+
+model Product {
+  id      String @id @default(cuid())
+  venueId String
+  name    String
+  price   Float
+  cost    Float?
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  stock Stock?
+  items SaleItem[]
+
+  movements     StockMovement[]
+  purchaseItems PurchaseItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model Stock {
+  id        String @id @default(cuid())
+  productId String @unique
+  quantity  Int
+  minStock  Int
+
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model StockMovement {
+  id        String  @id @default(cuid())
+  productId String
+  quantity  Int
+  note      String?
+
+  product Product @relation(fields: [productId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////
+// PURCHASES
+//////////////////////
+
+model Supplier {
+  id        String   @id @default(cuid())
+  venueId   String
+  name      String
+  createdAt DateTime @default(now())
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  purchases Purchase[]
+}
+
+model Purchase {
+  id         String  @id @default(cuid())
+  nightId    String?
+  supplierId String
+  total      Float
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  night    Night?   @relation(fields: [nightId], references: [id])
+
+  items PurchaseItem[]
+
+  createdAt DateTime @default(now())
+}
+
+model PurchaseItem {
+  id         String @id @default(cuid())
+  purchaseId String
+  productId  String
+  quantity   Int
+  cost       Float
+
+  purchase Purchase @relation(fields: [purchaseId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+}
+
+//////////////////////
+// EXPENSES
+//////////////////////
+
+model Expense {
+  id       String          @id @default(cuid())
+  nightId  String?
+  userId   String?
+  category ExpenseCategory
+  amount   Float
+  note     String?
+
+  night Night? @relation(fields: [nightId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////////
+// TICKETS
+//////////////////////
+
+model TicketSale {
+  id       String @id @default(cuid())
+  nightId  String
+  type     String
+  price    Float
+  quantity Int
+
+  night Night @relation(fields: [nightId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+

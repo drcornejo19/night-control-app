@@ -1,303 +1,470 @@
 import {
-  AlertTriangle,
   BadgeDollarSign,
-  Crown,
-  Martini,
+  Package,
   Receipt,
+  ShoppingBag,
   Ticket,
   Wallet,
 } from "lucide-react";
+import type { PaymentMethod, Prisma } from "@prisma/client";
 
+import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
-import { KpiCard } from "@/components/dashboard/kpi-card";
-import { SectionCard } from "@/components/dashboard/section-card";
-import { formatCurrency } from "@/lib/utils";
+import { DashboardKpiCard } from "@/components/dashboard/kpi-card";
+import { DashboardSection } from "@/components/dashboard/section";
+import { DashboardStatRow } from "@/components/dashboard/stat-row";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 
-const topProducts = [
-  { name: "Fernet Branca", units: 236, total: 708000 },
-  { name: "Vodka Smirnoff", units: 185, total: 555000 },
-  { name: "Red Bull", units: 312, total: 499200 },
-  { name: "Whisky J&B", units: 128, total: 384000 },
-  { name: "Heineken", units: 210, total: 273000 },
-];
+type LatestSale = Prisma.SaleGetPayload<{
+  include: {
+    payments: true;
+    items: {
+      include: {
+        product: true;
+      };
+    };
+    night: true;
+  };
+}>;
 
-const alerts = [
-  {
-    title: "Stock crítico",
-    description: "Hielo — quedan 5 bolsas",
-    tone: "danger",
-  },
-  {
-    title: "Stock bajo",
-    description: "Red Bull — quedan 12 unidades",
-    tone: "warning",
-  },
-  {
-    title: "Diferencia en caja",
-    description: "La diferencia supera el 1,5%",
-    tone: "warning",
-  },
-  {
-    title: "Gasto alto",
-    description: "Personal 18% más que anoche",
-    tone: "info",
-  },
-];
+type LatestExpense = Prisma.ExpenseGetPayload<{
+  include: {
+    night: true;
+  };
+}>;
 
-const activity = [
-  {
-    title: "Venta #1258",
-    subtitle: "Barra principal",
-    amount: 45000,
-    time: "00:42 hs",
-  },
-  {
-    title: "Gasto - DJ",
-    subtitle: "Gastos",
-    amount: 150000,
-    time: "00:20 hs",
-  },
-  {
-    title: "Venta Entrada",
-    subtitle: "Entrada general",
-    amount: 15000,
-    time: "00:15 hs",
-  },
-  {
-    title: "Venta #1257",
-    subtitle: "VIP Mesa 3",
-    amount: 220000,
-    time: "00:10 hs",
-  },
-  {
-    title: "Compra - Hielo",
-    subtitle: "Proveedor: Frío Express",
-    amount: 80000,
-    time: "Ayer 19:30",
-  },
-];
+type ProductRecord = Prisma.ProductGetPayload<Record<string, never>>;
 
-const hourlyData = [5, 12, 28, 44, 68, 84, 82, 89, 60, 22];
+type TopProductGroup = {
+  productId: string;
+  _sum: {
+    quantity: number | null;
+    price: number | null;
+  };
+};
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [
+    salesAggregate,
+    expensesAggregate,
+    salesCount,
+    productsCount,
+    ticketsAggregate,
+    latestSalesRaw,
+    latestExpensesRaw,
+    topProductsRawUntyped,
+    cashBoxes,
+    venuesCount,
+    nightsOpenCount,
+  ] = await Promise.all([
+    prisma.sale.aggregate({
+      _sum: { total: true },
+    }),
+    prisma.expense.aggregate({
+      _sum: { amount: true },
+    }),
+    prisma.sale.count(),
+    prisma.product.count(),
+    prisma.ticketSale.aggregate({
+      _sum: {
+        quantity: true,
+      },
+    }),
+    prisma.sale.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: {
+        payments: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        night: true,
+      },
+    }),
+    prisma.expense.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      include: {
+        night: true,
+      },
+    }),
+    prisma.saleItem.groupBy({
+      by: ["productId"],
+      _sum: {
+        quantity: true,
+        price: true,
+      },
+      orderBy: {
+        _sum: {
+          quantity: "desc",
+        },
+      },
+      take: 5,
+    }),
+    prisma.cashBox.findMany({
+      include: {
+        movements: true,
+        night: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    prisma.venue.count(),
+    prisma.night.count({
+      where: {
+        status: "OPEN",
+      },
+    }),
+  ]);
+
+  const latestSales = latestSalesRaw as LatestSale[];
+  const latestExpenses = latestExpensesRaw as LatestExpense[];
+  const topProductsRaw = topProductsRawUntyped as TopProductGroup[];
+
+  const revenue = salesAggregate._sum.total ?? 0;
+  const expenses = expensesAggregate._sum.amount ?? 0;
+  const profit = revenue - expenses;
+  const soldTickets = ticketsAggregate._sum.quantity ?? 0;
+
+  const paymentSummary: Record<PaymentMethod, number> = {
+  CASH: 0,
+  TRANSFER: 0,
+  CARD: 0,
+  OTHER: 0,
+};
+
+latestSales.forEach((sale: LatestSale) => {
+  sale.payments.forEach((payment: LatestSale["payments"][number]) => {
+    const method = payment.method as PaymentMethod;
+    paymentSummary[method] += payment.amount;
+  });
+});
+
+  const totalCash = paymentSummary.CASH;
+  const totalTransfer = paymentSummary.TRANSFER;
+  const totalCard = paymentSummary.CARD;
+  const totalOther = paymentSummary.OTHER;
+
+  const productIds = topProductsRaw.map((item: TopProductGroup) => item.productId);
+
+  const products: ProductRecord[] = productIds.length
+    ? await prisma.product.findMany({
+        where: {
+          id: {
+            in: productIds,
+          },
+        },
+      })
+    : [];
+
+  const productMap = new Map(
+    products.map((product: ProductRecord) => [product.id, product])
+  );
+
+  const topProducts = topProductsRaw.map((item: TopProductGroup) => {
+    const product = productMap.get(item.productId);
+
+    return {
+      id: item.productId,
+      name: product?.name ?? "Producto",
+      quantity: item._sum.quantity ?? 0,
+      estimatedRevenue: (item._sum.price ?? 0) * (item._sum.quantity ?? 0),
+    };
+  });
+
+  const latestCashBox = cashBoxes[0];
+  const cashOpening = latestCashBox?.opening ?? 0;
+  const cashExpected = latestCashBox?.expected ?? 0;
+  const cashClosing = latestCashBox?.closing ?? 0;
+  const cashDifference = latestCashBox?.difference ?? 0;
+
   return (
     <AppShell>
       <div className="space-y-6">
         <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-6">
-          <KpiCard
-            title="Recaudación total"
-            value={4350000}
-            change={18}
+          <DashboardKpiCard
+            title="Ingresos"
+            value={revenue}
             icon={BadgeDollarSign}
+            trend="up"
+            changeLabel="Ventas totales registradas"
           />
-          <KpiCard
-            title="Ventas barra"
-            value={2850000}
-            change={21}
-            icon={Martini}
-          />
-          <KpiCard
-            title="Entradas"
-            value={1250000}
-            change={15}
-            icon={Ticket}
-          />
-          <KpiCard
+
+          <DashboardKpiCard
             title="Gastos"
-            value={620000}
-            change={8}
+            value={expenses}
             icon={Receipt}
-            variant="danger"
+            trend={expenses > 0 ? "down" : "neutral"}
+            changeLabel="Operación de la noche"
           />
-          <KpiCard
-            title="Ganancia neta"
-            value={3730000}
-            change={20}
-            icon={Crown}
-            variant="success"
-          />
-          <KpiCard
-            title="Diferencia caja"
-            value={85000}
-            change={1.9}
+
+          <DashboardKpiCard
+            title="Ganancia"
+            value={profit}
             icon={Wallet}
+            trend={profit >= 0 ? "up" : "down"}
+            changeLabel="Ingresos menos gastos"
+          />
+
+          <DashboardKpiCard
+            title="Ventas"
+            value={salesCount}
+            icon={ShoppingBag}
+            trend="neutral"
+            changeLabel="Cantidad de tickets de venta"
+          />
+
+          <DashboardKpiCard
+            title="Productos"
+            value={productsCount}
+            icon={Package}
+            trend="neutral"
+            changeLabel="Productos cargados"
+          />
+
+          <DashboardKpiCard
+            title="Entradas"
+            value={soldTickets}
+            icon={Ticket}
+            trend="neutral"
+            changeLabel="Tickets vendidos"
           />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1.45fr_0.55fr_0.45fr]">
-          <SectionCard title="Ingresos por hora">
-            <div className="flex h-[340px] flex-col justify-between rounded-[24px] border border-white/10 bg-[linear-gradient(to_bottom,rgba(212,175,55,0.12),transparent)] p-5">
-              <div className="flex items-end gap-2">
-                {hourlyData.map((value, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-1 flex-col items-center gap-3"
-                  >
-                    <div className="flex h-[240px] w-full items-end">
-                      <div
-                        className="w-full rounded-t-2xl bg-gradient-to-t from-[#8C6A18] via-[#D4AF37] to-[#F2D16B] shadow-[0_0_18px_rgba(212,175,55,0.16)]"
-                        style={{ height: `${value}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-zinc-500">
-                      {index + 20 > 23 ? `${index - 4}hs` : `${index + 20}hs`}
-                    </span>
-                  </div>
-                ))}
-              </div>
+        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <DashboardSection
+            title="Resumen operativo"
+            subtitle="Vista general del estado actual del boliche"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <DashboardStatRow
+                label="Boliches cargados"
+                value={formatNumber(venuesCount)}
+              />
+              <DashboardStatRow
+                label="Noches abiertas"
+                value={formatNumber(nightsOpenCount)}
+              />
+              <DashboardStatRow
+                label="Cobrado en efectivo"
+                value={formatCurrency(totalCash)}
+              />
+              <DashboardStatRow
+                label="Cobrado por transferencia"
+                value={formatCurrency(totalTransfer)}
+              />
+              <DashboardStatRow
+                label="Cobrado con tarjeta"
+                value={formatCurrency(totalCard)}
+              />
+              <DashboardStatRow
+                label="Otros cobros"
+                value={formatCurrency(totalOther)}
+              />
             </div>
-          </SectionCard>
+          </DashboardSection>
 
-          <SectionCard title="Resumen de caja" action="Ver detalle">
+          <DashboardSection
+            title="Caja actual"
+            subtitle="Último cierre o caja activa detectada"
+          >
             <div className="space-y-4">
-              {[
-                ["Efectivo", "$1.520.000"],
-                ["Transferencia", "$1.210.000"],
-                ["Tarjeta", "$1.535.000"],
-              ].map(([label, value]) => (
-                <div
-                  key={label}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                >
-                  <span className="text-sm text-zinc-300">{label}</span>
-                  <span className="text-sm font-semibold text-white">
-                    {value}
-                  </span>
-                </div>
-              ))}
-
-              <div className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">Total esperado</span>
-                  <span className="font-semibold text-white">$4.265.000</span>
-                </div>
-
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-400">Total contado</span>
-                  <span className="font-semibold text-white">$4.350.000</span>
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">
-                  <span className="text-sm font-semibold text-emerald-400">
-                    Diferencia
-                  </span>
-                  <span className="text-lg font-semibold text-emerald-400">
-                    $85.000
-                  </span>
-                </div>
-              </div>
+              <DashboardStatRow
+                label="Apertura"
+                value={formatCurrency(cashOpening)}
+              />
+              <DashboardStatRow
+                label="Esperado"
+                value={formatCurrency(cashExpected)}
+              />
+              <DashboardStatRow
+                label="Cierre"
+                value={formatCurrency(cashClosing)}
+              />
+              <DashboardStatRow
+                label="Diferencia"
+                value={formatCurrency(cashDifference)}
+              />
             </div>
-          </SectionCard>
-
-          <SectionCard title="Estado de la noche">
-            <div className="flex h-full flex-col items-center justify-between gap-6 rounded-[24px] border border-[#D4AF37]/15 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.12),transparent_55%)] p-6 text-center">
-              <div className="flex h-44 w-44 items-center justify-center rounded-full border-[10px] border-[#D4AF37]/70">
-                <div className="flex h-32 w-32 items-center justify-center rounded-full border border-[#D4AF37]/20 bg-black/20">
-                  <span className="text-sm font-semibold uppercase tracking-[0.24em] text-[#D4AF37]">
-                    En curso
-                  </span>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm text-zinc-400">Noche abierta desde</p>
-                <p className="mt-2 text-3xl font-semibold text-white">
-                  22:15 hs
-                </p>
-              </div>
-
-              <button className="w-full rounded-2xl bg-[#D4AF37] px-4 py-3.5 text-sm font-semibold text-black transition hover:brightness-110">
-                Cerrar noche
-              </button>
-            </div>
-          </SectionCard>
+          </DashboardSection>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.85fr_0.85fr_1fr]">
-          <SectionCard title="Top productos" action="Ver todos">
+        <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <DashboardSection
+            title="Top productos"
+            subtitle="Ranking por cantidad vendida"
+          >
             <div className="space-y-3">
-              {topProducts.map((product, index) => (
-                <div
-                  key={product.name}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF37]/10 text-sm font-bold text-[#D4AF37]">
-                      {index + 1}
+              {topProducts.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
+                  No hay productos vendidos todavía.
+                </div>
+              ) : (
+                topProducts.map((product, index) => (
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#D4AF37]/10 text-sm font-bold text-[#D4AF37]">
+                        {index + 1}
+                      </div>
+
+                      <div>
+                        <p className="font-medium text-white">{product.name}</p>
+                        <p className="text-sm text-zinc-400">
+                          {formatNumber(product.quantity)} unidades
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <p className="font-medium text-white">{product.name}</p>
-                      <p className="text-sm text-zinc-400">
-                        {product.units} uds
+                    <div className="text-right">
+                      <p className="font-semibold text-white">
+                        {formatCurrency(product.estimatedRevenue)}
                       </p>
+                      <p className="text-xs text-zinc-500">estimado</p>
                     </div>
                   </div>
-
-                  <p className="text-sm font-semibold text-white">
-                    {formatCurrency(product.total)}
-                  </p>
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          </SectionCard>
+          </DashboardSection>
 
-          <SectionCard title="Alertas" action="Ver todas">
+          <DashboardSection
+            title="Últimas ventas"
+            subtitle="Operación reciente registrada"
+          >
             <div className="space-y-3">
-              {alerts.map((alert) => (
-                <div
-                  key={alert.title}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`mt-0.5 rounded-xl p-2 ${
-                        alert.tone === "danger"
-                          ? "bg-red-500/15 text-red-400"
-                          : alert.tone === "warning"
-                          ? "bg-amber-500/15 text-amber-400"
-                          : "bg-sky-500/15 text-sky-400"
-                      }`}
-                    >
-                      <AlertTriangle className="h-4 w-4" />
-                    </div>
+              {latestSales.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
+                  No hay ventas registradas.
+                </div>
+              ) : (
+                latestSales.map((sale: LatestSale) => (
+                  <div
+                    key={sale.id}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-white">
+                          Venta {sale.type}
+                        </p>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Noche: {sale.night?.name ?? "Sin noche"}
+                        </p>
 
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {sale.items.map(
+                            (item: LatestSale["items"][number]) => (
+                              <span
+                                key={item.id}
+                                className="rounded-full bg-black/30 px-2.5 py-1 text-xs text-zinc-300"
+                              >
+                                {item.product.name} x{item.quantity}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="font-semibold text-white">
+                          {formatCurrency(sale.total)}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {new Date(sale.createdAt).toLocaleString("es-AR")}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </DashboardSection>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-2">
+          <DashboardSection
+            title="Últimos gastos"
+            subtitle="Egresos operativos registrados"
+          >
+            <div className="space-y-3">
+              {latestExpenses.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
+                  No hay gastos registrados.
+                </div>
+              ) : (
+                latestExpenses.map((expense: LatestExpense) => (
+                  <div
+                    key={expense.id}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
+                  >
                     <div>
-                      <p className="font-medium text-white">{alert.title}</p>
+                      <p className="font-medium text-white">
+                        {expense.category}
+                      </p>
                       <p className="mt-1 text-sm text-zinc-400">
-                        {alert.description}
+                        {expense.note || "Sin detalle"}
+                      </p>
+                    </div>
+
+                    <div className="text-right">
+                      <p className="font-semibold text-white">
+                        {formatCurrency(expense.amount)}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {new Date(expense.createdAt).toLocaleString("es-AR")}
                       </p>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
-          </SectionCard>
+          </DashboardSection>
 
-          <SectionCard title="Últimas operaciones" action="Ver todas">
-            <div className="space-y-3">
-              {activity.map((item) => (
-                <div
-                  key={`${item.title}-${item.time}`}
-                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-4"
-                >
-                  <div>
-                    <p className="font-medium text-white">{item.title}</p>
-                    <p className="mt-1 text-sm text-zinc-400">
-                      {item.subtitle}
-                    </p>
-                  </div>
-
-                  <div className="text-right">
-                    <p className="font-semibold text-white">
-                      {formatCurrency(item.amount)}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">{item.time}</p>
-                  </div>
-                </div>
-              ))}
+          <DashboardSection
+            title="Lectura gerencial"
+            subtitle="Indicadores rápidos para el dueño o encargado"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <DashboardStatRow
+                label="Margen bruto"
+                value={
+                  revenue > 0
+                    ? `${(((profit / revenue) * 100) || 0).toFixed(1)}%`
+                    : "0%"
+                }
+              />
+              <DashboardStatRow
+                label="Promedio por venta"
+                value={
+                  salesCount > 0
+                    ? formatCurrency(revenue / salesCount)
+                    : formatCurrency(0)
+                }
+              />
+              <DashboardStatRow
+                label="Ventas registradas"
+                value={formatNumber(salesCount)}
+              />
+              <DashboardStatRow
+                label="Productos activos"
+                value={formatNumber(productsCount)}
+              />
+              <DashboardStatRow
+                label="Entradas emitidas"
+                value={formatNumber(soldTickets)}
+              />
+              <DashboardStatRow
+                label="Estado general"
+                value={profit >= 0 ? "Rentable" : "En revisión"}
+              />
             </div>
-          </SectionCard>
+          </DashboardSection>
         </section>
       </div>
     </AppShell>

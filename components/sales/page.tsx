@@ -5,25 +5,37 @@ import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatCurrency } from "@/lib/utils";
 
-type ExpenseWithNight = Prisma.ExpenseGetPayload<{
+type SaleWithRelations = Prisma.SaleGetPayload<{
   include: {
     night: true;
+    payments: true;
+    items: {
+      include: {
+        product: true;
+      };
+    };
   };
 }>;
 
-export default async function ExpensesPage() {
-  const expensesRaw = await prisma.expense.findMany({
+export default async function SalesPage() {
+  const salesRaw = await prisma.sale.findMany({
     orderBy: { createdAt: "desc" },
     take: 20,
     include: {
       night: true,
+      payments: true,
+      items: {
+        include: {
+          product: true,
+        },
+      },
     },
   });
 
-  const expenses = expensesRaw as ExpenseWithNight[];
+  const sales = salesRaw as SaleWithRelations[];
 
-  const total = expenses.reduce(
-    (acc: number, expense: ExpenseWithNight) => acc + expense.amount,
+  const total = sales.reduce(
+    (acc: number, sale: SaleWithRelations) => acc + sale.total,
     0
   );
 
@@ -33,34 +45,34 @@ export default async function ExpensesPage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-[#D4AF37]/80">
-              Gastos
+              Ventas
             </p>
             <h1 className="mt-2 text-4xl font-semibold text-white">
-              Gastos registrados
+              Ventas registradas
             </h1>
             <p className="mt-2 text-zinc-400">
-              Egresos operativos cargados en el sistema.
+              Últimas operaciones cargadas en el sistema.
             </p>
           </div>
 
           <Link
-            href="/expenses/new"
+            href="/sales/new"
             className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
           >
-            Nuevo gasto
+            Nueva venta
           </Link>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-zinc-400">Cantidad de gastos</p>
+            <p className="text-sm text-zinc-400">Cantidad de ventas</p>
             <p className="mt-2 text-3xl font-semibold text-white">
-              {expenses.length}
+              {sales.length}
             </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-zinc-400">Total gastado</p>
+            <p className="text-sm text-zinc-400">Total vendido</p>
             <p className="mt-2 text-3xl font-semibold text-white">
               {formatCurrency(total)}
             </p>
@@ -69,44 +81,67 @@ export default async function ExpensesPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-zinc-400">Última actualización</p>
             <p className="mt-2 text-lg font-semibold text-white">
-              {expenses[0]
-                ? new Date(expenses[0].createdAt).toLocaleString("es-AR")
-                : "Sin gastos"}
+              {sales[0]
+                ? new Date(sales[0].createdAt).toLocaleString("es-AR")
+                : "Sin ventas"}
             </p>
           </div>
         </div>
 
         <div className="space-y-4">
-          {expenses.length === 0 ? (
+          {sales.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
-              No hay gastos registrados todavía.
+              No hay ventas registradas todavía.
             </div>
           ) : (
-            expenses.map((expense: ExpenseWithNight) => (
+            sales.map((sale: SaleWithRelations) => (
               <div
-                key={expense.id}
+                key={sale.id}
                 className="rounded-2xl border border-white/10 bg-white/5 p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-lg font-semibold text-white">
-                      {expense.category}
+                      Venta {sale.type}
                     </p>
                     <p className="mt-1 text-sm text-zinc-400">
-                      Noche: {expense.night?.name ?? "Sin noche"}
+                      Noche: {sale.night?.name ?? "Sin noche"}
                     </p>
-                    <p className="mt-2 text-sm text-zinc-300">
-                      {expense.note || "Sin detalle"}
-                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sale.items.map(
+                        (item: SaleWithRelations["items"][number]) => (
+                          <span
+                            key={item.id}
+                            className="rounded-full bg-black/30 px-2.5 py-1 text-xs text-zinc-300"
+                          >
+                            {item.product.name} x{item.quantity}
+                          </span>
+                        )
+                      )}
+                    </div>
                   </div>
 
                   <div className="text-right">
                     <p className="text-xl font-semibold text-white">
-                      {formatCurrency(expense.amount)}
+                      {formatCurrency(sale.total)}
                     </p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      {new Date(expense.createdAt).toLocaleString("es-AR")}
+                      {new Date(sale.createdAt).toLocaleString("es-AR")}
                     </p>
+
+                    <div className="mt-2 flex flex-wrap justify-end gap-2">
+                      {sale.payments.map(
+                        (payment: SaleWithRelations["payments"][number]) => (
+                          <span
+                            key={payment.id}
+                            className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-xs text-zinc-300"
+                          >
+                            {payment.method}: {formatCurrency(payment.amount)}
+                          </span>
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
