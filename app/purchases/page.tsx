@@ -4,6 +4,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatCurrency } from "@/lib/utils";
+import { getActiveVenueId } from "@/lib/venues/active-venue";
+import { VenueSwitcher } from "@/components/venues/venue-switcher";
 
 type PurchaseWithRelations = Prisma.PurchaseGetPayload<{
   include: {
@@ -18,19 +20,35 @@ type PurchaseWithRelations = Prisma.PurchaseGetPayload<{
 }>;
 
 export default async function PurchasesPage() {
-  const purchasesRaw = await prisma.purchase.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    include: {
-      supplier: true,
-      night: true,
-      items: {
-        include: {
-          product: true,
+  const activeVenueId = await getActiveVenueId();
+
+  const [venues, purchasesRaw] = await Promise.all([
+    prisma.venue.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.purchase.findMany({
+      where: {
+        supplier: {
+          venueId: activeVenueId ?? undefined,
         },
       },
-    },
-  });
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        supplier: true,
+        night: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   const purchases = purchasesRaw as PurchaseWithRelations[];
 
@@ -38,6 +56,9 @@ export default async function PurchasesPage() {
     (acc: number, purchase: PurchaseWithRelations) => acc + purchase.total,
     0
   );
+
+  const activeVenueName =
+    venues.find((venue) => venue.id === activeVenueId)?.name ?? "Sin boliche";
 
   return (
     <AppShell>
@@ -51,19 +72,30 @@ export default async function PurchasesPage() {
               Compras registradas
             </h1>
             <p className="mt-2 text-zinc-400">
-              Ingresos de mercadería y reposición de stock.
+              Ingresos de mercadería del boliche activo.
             </p>
           </div>
 
-          <Link
-            href="/purchases/new"
-            className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-          >
-            Nueva compra
-          </Link>
+          <div className="flex items-center gap-3">
+            <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
+
+            <Link
+              href="/purchases/new"
+              className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+            >
+              Nueva compra
+            </Link>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-zinc-400">Boliche activo</p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {activeVenueName}
+            </p>
+          </div>
+
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-zinc-400">Cantidad de compras</p>
             <p className="mt-2 text-3xl font-semibold text-white">
@@ -77,21 +109,12 @@ export default async function PurchasesPage() {
               {formatCurrency(total)}
             </p>
           </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-zinc-400">Última actualización</p>
-            <p className="mt-2 text-lg font-semibold text-white">
-              {purchases[0]
-                ? new Date(purchases[0].createdAt).toLocaleString("es-AR")
-                : "Sin compras"}
-            </p>
-          </div>
         </div>
 
         <div className="space-y-4">
           {purchases.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
-              No hay compras registradas todavía.
+              No hay compras registradas para este boliche.
             </div>
           ) : (
             purchases.map((purchase: PurchaseWithRelations) => (

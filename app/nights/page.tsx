@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
+import { getActiveVenueId } from "@/lib/venues/active-venue";
+import { VenueSwitcher } from "@/components/venues/venue-switcher";
 
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
@@ -12,12 +14,26 @@ type NightWithVenue = Prisma.NightGetPayload<{
 }>;
 
 export default async function NightsPage() {
-  const nightsRaw = await prisma.night.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      venue: true,
-    },
-  });
+  const activeVenueId = await getActiveVenueId();
+
+  const [venues, nightsRaw] = await Promise.all([
+    prisma.venue.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.night.findMany({
+      where: {
+        venueId: activeVenueId ?? undefined,
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        venue: true,
+      },
+    }),
+  ]);
 
   const nights = nightsRaw as NightWithVenue[];
 
@@ -37,12 +53,16 @@ export default async function NightsPage() {
             </p>
           </div>
 
-          <Link
-            href="/nights/new"
-            className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-          >
-            Nueva noche
-          </Link>
+          <div className="flex items-center gap-3">
+            <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
+
+            <Link
+              href="/nights/new"
+              className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+            >
+              Nueva noche
+            </Link>
+          </div>
         </div>
 
         <div className="rounded-[30px] border border-white/10 bg-gradient-to-br from-[#111111] to-[#090909] p-5 md:p-6">

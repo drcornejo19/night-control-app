@@ -4,6 +4,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 import { formatCurrency } from "@/lib/utils";
+import { getActiveVenueId } from "@/lib/venues/active-venue";
+import { VenueSwitcher } from "@/components/venues/venue-switcher";
 
 type ExpenseWithNight = Prisma.ExpenseGetPayload<{
   include: {
@@ -12,13 +14,29 @@ type ExpenseWithNight = Prisma.ExpenseGetPayload<{
 }>;
 
 export default async function ExpensesPage() {
-  const expensesRaw = await prisma.expense.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    include: {
-      night: true,
-    },
-  });
+  const activeVenueId = await getActiveVenueId();
+
+  const [venues, expensesRaw] = await Promise.all([
+    prisma.venue.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.expense.findMany({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        night: true,
+      },
+    }),
+  ]);
 
   const expenses = expensesRaw as ExpenseWithNight[];
 
@@ -26,6 +44,9 @@ export default async function ExpensesPage() {
     (acc: number, expense: ExpenseWithNight) => acc + expense.amount,
     0
   );
+
+  const activeVenueName =
+    venues.find((venue) => venue.id === activeVenueId)?.name ?? "Sin boliche";
 
   return (
     <AppShell>
@@ -39,19 +60,30 @@ export default async function ExpensesPage() {
               Gastos registrados
             </h1>
             <p className="mt-2 text-zinc-400">
-              Egresos operativos cargados en el sistema.
+              Egresos del boliche activo.
             </p>
           </div>
 
-          <Link
-            href="/expenses/new"
-            className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-          >
-            Nuevo gasto
-          </Link>
+          <div className="flex items-center gap-3">
+            <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
+
+            <Link
+              href="/expenses/new"
+              className="rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+            >
+              Nuevo gasto
+            </Link>
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <p className="text-sm text-zinc-400">Boliche activo</p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {activeVenueName}
+            </p>
+          </div>
+
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
             <p className="text-sm text-zinc-400">Cantidad de gastos</p>
             <p className="mt-2 text-3xl font-semibold text-white">
@@ -65,21 +97,12 @@ export default async function ExpensesPage() {
               {formatCurrency(total)}
             </p>
           </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-            <p className="text-sm text-zinc-400">Última actualización</p>
-            <p className="mt-2 text-lg font-semibold text-white">
-              {expenses[0]
-                ? new Date(expenses[0].createdAt).toLocaleString("es-AR")
-                : "Sin gastos"}
-            </p>
-          </div>
         </div>
 
         <div className="space-y-4">
           {expenses.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
-              No hay gastos registrados todavía.
+              No hay gastos registrados para este boliche.
             </div>
           ) : (
             expenses.map((expense: ExpenseWithNight) => (

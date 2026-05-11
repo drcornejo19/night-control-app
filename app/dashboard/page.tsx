@@ -7,6 +7,9 @@ import {
   Wallet,
 } from "lucide-react";
 import type { PaymentMethod, Prisma } from "@prisma/client";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
+import { syncCurrentUser } from "@/actions/auth/sync-user";
 
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
@@ -14,6 +17,8 @@ import { DashboardKpiCard } from "@/components/dashboard/kpi-card";
 import { DashboardSection } from "@/components/dashboard/section";
 import { DashboardStatRow } from "@/components/dashboard/stat-row";
 import { formatCurrency, formatNumber } from "@/lib/utils";
+import { VenueSwitcher } from "@/components/venues/venue-switcher";
+import { getActiveVenueId } from "@/lib/venues/active-venue";
 
 type LatestSale = Prisma.SaleGetPayload<{
   include: {
@@ -44,6 +49,17 @@ type TopProductGroup = {
 };
 
 export default async function DashboardPage() {
+  const [activeVenueId, venues] = await Promise.all([
+    getActiveVenueId(),
+    prisma.venue.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+  ]);
+
   const [
     salesAggregate,
     expensesAggregate,
@@ -54,23 +70,57 @@ export default async function DashboardPage() {
     latestExpensesRaw,
     topProductsRawUntyped,
     cashBoxes,
-    venuesCount,
     nightsOpenCount,
   ] = await Promise.all([
     prisma.sale.aggregate({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       _sum: { total: true },
     }),
+
     prisma.expense.aggregate({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       _sum: { amount: true },
     }),
-    prisma.sale.count(),
-    prisma.product.count(),
+
+    prisma.sale.count({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
+    }),
+
+    prisma.product.count({
+      where: {
+        venueId: activeVenueId ?? undefined,
+      },
+    }),
+
     prisma.ticketSale.aggregate({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       _sum: {
         quantity: true,
       },
     }),
+
     prisma.sale.findMany({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: {
@@ -83,15 +133,27 @@ export default async function DashboardPage() {
         night: true,
       },
     }),
+
     prisma.expense.findMany({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: {
         night: true,
       },
     }),
+
     prisma.saleItem.groupBy({
       by: ["productId"],
+      where: {
+        product: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       _sum: {
         quantity: true,
         price: true,
@@ -103,7 +165,13 @@ export default async function DashboardPage() {
       },
       take: 5,
     }),
+
     prisma.cashBox.findMany({
+      where: {
+        night: {
+          venueId: activeVenueId ?? undefined,
+        },
+      },
       include: {
         movements: true,
         night: true,
@@ -112,9 +180,10 @@ export default async function DashboardPage() {
         createdAt: "desc",
       },
     }),
-    prisma.venue.count(),
+
     prisma.night.count({
       where: {
+        venueId: activeVenueId ?? undefined,
         status: "OPEN",
       },
     }),
@@ -130,25 +199,27 @@ export default async function DashboardPage() {
   const soldTickets = ticketsAggregate._sum.quantity ?? 0;
 
   const paymentSummary: Record<PaymentMethod, number> = {
-  CASH: 0,
-  TRANSFER: 0,
-  CARD: 0,
-  OTHER: 0,
-};
+    CASH: 0,
+    TRANSFER: 0,
+    CARD: 0,
+    OTHER: 0,
+  };
 
-latestSales.forEach((sale: LatestSale) => {
-  sale.payments.forEach((payment: LatestSale["payments"][number]) => {
-    const method = payment.method as PaymentMethod;
-    paymentSummary[method] += payment.amount;
+  latestSales.forEach((sale: LatestSale) => {
+    sale.payments.forEach((payment: LatestSale["payments"][number]) => {
+      const method = payment.method as PaymentMethod;
+      paymentSummary[method] += payment.amount;
+    });
   });
-});
 
   const totalCash = paymentSummary.CASH;
   const totalTransfer = paymentSummary.TRANSFER;
   const totalCard = paymentSummary.CARD;
   const totalOther = paymentSummary.OTHER;
 
-  const productIds = topProductsRaw.map((item: TopProductGroup) => item.productId);
+  const productIds = topProductsRaw.map(
+    (item: TopProductGroup) => item.productId
+  );
 
   const products: ProductRecord[] = productIds.length
     ? await prisma.product.findMany({
@@ -181,9 +252,25 @@ latestSales.forEach((sale: LatestSale) => {
   const cashClosing = latestCashBox?.closing ?? 0;
   const cashDifference = latestCashBox?.difference ?? 0;
 
+  const activeVenueName =
+    venues.find((venue) => venue.id === activeVenueId)?.name ?? "Sin boliche";
+
   return (
     <AppShell>
       <div className="space-y-6">
+        <section className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.28em] text-[#D4AF37]/80">
+              Contexto activo
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Boliche seleccionado
+            </h2>
+          </div>
+
+          <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
+        </section>
+
         <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-6">
           <DashboardKpiCard
             title="Ingresos"
@@ -241,8 +328,8 @@ latestSales.forEach((sale: LatestSale) => {
           >
             <div className="grid gap-4 md:grid-cols-2">
               <DashboardStatRow
-                label="Boliches cargados"
-                value={formatNumber(venuesCount)}
+                label="Boliche activo"
+                value={activeVenueName}
               />
               <DashboardStatRow
                 label="Noches abiertas"

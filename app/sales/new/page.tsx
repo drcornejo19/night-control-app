@@ -1,15 +1,26 @@
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
-import { PosClient } from "@/components/pos/pos-client";
+import { NewSaleForm } from "@/components/sales/new-sale-form";
 import { getActiveVenueId } from "@/lib/venues/active-venue";
 import { VenueSwitcher } from "@/components/venues/venue-switcher";
 
-export default async function PosPage() {
+export default async function NewSalePage() {
   const activeVenueId = await getActiveVenueId();
 
-  const [venues, products, nights] = await Promise.all([
+  const [venues, nights, products] = await Promise.all([
     prisma.venue.findMany({
       orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.night.findMany({
+      where: {
+        venueId: activeVenueId ?? undefined,
+        status: "OPEN",
+      },
+      orderBy: { createdAt: "desc" },
       select: {
         id: true,
         name: true,
@@ -24,22 +35,11 @@ export default async function PosPage() {
       },
       orderBy: { name: "asc" },
     }),
-    prisma.night.findMany({
-      where: {
-        venueId: activeVenueId ?? undefined,
-        status: "OPEN",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-    }),
   ]);
 
-  const posProducts = products.map((product) => ({
+  type ProductWithStock = (typeof products)[number];
+
+  const productOptions = products.map((product: ProductWithStock) => ({
     id: product.id,
     name: product.name,
     price: product.price,
@@ -48,24 +48,26 @@ export default async function PosPage() {
 
   return (
     <AppShell>
-      <div className="space-y-6">
+      <div className="mx-auto max-w-4xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-sm uppercase tracking-[0.28em] text-[#D4AF37]/80">
-              POS
+              Ventas
             </p>
             <h1 className="mt-2 text-4xl font-semibold text-white">
-              Caja rápida
+              Nueva venta
             </h1>
             <p className="mt-2 text-zinc-400">
-              Registrá ventas en segundos con una interfaz operativa.
+              Registrá una venta para el boliche activo.
             </p>
           </div>
 
           <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
         </div>
 
-        <PosClient products={posProducts} nights={nights} />
+        <div className="rounded-[28px] border border-white/10 bg-gradient-to-br from-[#131313] to-[#090909] p-6">
+          <NewSaleForm nights={nights} products={productOptions} />
+        </div>
       </div>
     </AppShell>
   );
