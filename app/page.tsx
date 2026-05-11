@@ -1,17 +1,34 @@
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Martini, ShieldCheck, Wallet, BarChart3 } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  ShieldCheck,
+  Wallet,
+} from "lucide-react";
+
+import { SplashIntro } from "@/components/SplashIntro";
 
 export default function HomePage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <SplashIntro />
+
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.16),transparent_30%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(0,0,0,0.45))]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-10">
         <header className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 text-[#D4AF37]">
-              <Martini className="h-7 w-7" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#D4AF37]/30 bg-[#D4AF37]/10">
+              <Image
+                src="/night-control-emblem-crop.png"
+                alt="Night Control"
+                width={42}
+                height={42}
+                className="object-contain drop-shadow-[0_0_16px_rgba(212,175,55,0.45)]"
+                priority
+              />
             </div>
 
             <div>
@@ -19,7 +36,7 @@ export default function HomePage() {
                 Night Control
               </p>
               <h1 className="text-xl font-semibold tracking-tight">
-                Sistema de gestión para boliches
+                Gestión inteligente para tu negocio
               </h1>
             </div>
           </div>
@@ -36,7 +53,7 @@ export default function HomePage() {
         <section className="grid flex-1 items-center gap-12 py-16 xl:grid-cols-[1.15fr_0.85fr]">
           <div>
             <div className="inline-flex rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[#D4AF37]">
-              Control total de tu noche
+              Control total de tu negocio
             </div>
 
             <h2 className="mt-8 max-w-4xl text-5xl font-semibold leading-tight tracking-tight text-white md:text-6xl">
@@ -45,9 +62,10 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
-              Night Control es una plataforma premium para boliches y actividad
-              nocturna, diseñada para centralizar toda la operación desde una
-              sola interfaz clara, rápida y mobile-first.
+              Night Control es una plataforma premium para comercios
+              gastronómicos y negocios operativos, diseñada para centralizar
+              ventas, caja, stock, pedidos y rentabilidad desde una sola
+              interfaz clara, rápida y mobile-first.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
@@ -67,9 +85,9 @@ export default function HomePage() {
             <div className="mt-12 grid gap-4 sm:grid-cols-3">
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
                 <Wallet className="h-6 w-6 text-[#D4AF37]" />
-                <h3 className="mt-4 text-lg font-semibold">Caja nocturna</h3>
+                <h3 className="mt-4 text-lg font-semibold">Caja diaria</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Apertura, cierre, diferencia y control de medios de pago.
+                  Apertura, cierre, diferencias y control de medios de pago.
                 </p>
               </div>
 
@@ -83,9 +101,11 @@ export default function HomePage() {
 
               <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
                 <ShieldCheck className="h-6 w-6 text-[#D4AF37]" />
-                <h3 className="mt-4 text-lg font-semibold">Control premium</h3>
+                <h3 className="mt-4 text-lg font-semibold">
+                  Gestión multirubro
+                </h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Gestión multi-boliche pensada para nocturnidad real.
+                  Pensado para bares, rotiserías, hamburgueserías y comercios.
                 </p>
               </div>
             </div>
@@ -114,7 +134,7 @@ export default function HomePage() {
                 <div className="mt-5 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                     <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">
-                      Ventas barra
+                      Ventas del día
                     </p>
                     <p className="mt-2 text-2xl font-semibold">$2.850.000</p>
                   </div>
@@ -131,11 +151,11 @@ export default function HomePage() {
 
             <div className="absolute -bottom-8 -left-6 hidden w-56 rounded-[28px] border border-white/10 bg-[#0B0B0B]/95 p-4 shadow-2xl md:block">
               <p className="text-[11px] uppercase tracking-[0.28em] text-[#D4AF37]/80">
-                Noche abierta
+                Jornada abierta
               </p>
-              <p className="mt-3 text-sm text-zinc-400">Desde 22:15 hs</p>
+              <p className="mt-3 text-sm text-zinc-400">Desde 08:30 hs</p>
               <p className="mt-1 text-lg font-semibold text-white">
-                Black Club Palermo
+                Sucursal Palermo
               </p>
             </div>
           </div>
