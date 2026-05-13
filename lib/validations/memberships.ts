@@ -1,16 +1,10 @@
 import { z } from "zod";
+import { appRoles } from "@/lib/constants/roles";
 
 export const createMembershipSchema = z.object({
   userId: z.string().min(1, "Usuario requerido"),
   venueId: z.string().min(1, "Boliche requerido"),
-  role: z.enum([
-    "SUPER_ADMIN",
-    "OWNER",
-    "MANAGER",
-    "CASHIER",
-    "BAR",
-    "SECURITY",
-  ]),
+  role: z.enum(appRoles),
 });
 
 export const deleteMembershipSchema = z.object({

@@ -1,15 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type FormEvent, useState, useTransition } from "react";
 import { closeCash } from "@/actions/cash/close-cash";
 import { useRouter } from "next/navigation";
 
-export function CloseCashForm({ cashBox }: any) {
+type CloseCashFormProps = {
+  cashBox: {
+    id: string;
+  };
+};
+
+export function CloseCashForm({ cashBox }: CloseCashFormProps) {
   const [closing, setClosing] = useState(0);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  function submit(e: any) {
+  function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     startTransition(async () => {

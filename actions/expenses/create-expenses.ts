@@ -21,7 +21,7 @@ export async function createExpense(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -39,10 +39,13 @@ export async function createExpense(
   await prisma.$transaction(async (tx) => {
     const expense = await tx.expense.create({
       data: {
+        venueId: night.venueId,
         nightId,
         category,
         amount,
+        description: note,
         note,
+        paymentMethod: paymentMethod as PaymentMethod,
       },
     });
 
@@ -51,6 +54,7 @@ export async function createExpense(
         data: {
           cashBoxId: night.cashBox.id,
           type: MovementType.EXPENSE,
+          category,
           amount,
           method: paymentMethod as PaymentMethod,
           note: `Egreso ${expense.category}${note ? ` - ${note}` : ""}`,

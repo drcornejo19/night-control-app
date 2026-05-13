@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { getCurrentAppUser } from "@/lib/auth";
 
 type ActionState =
   | { ok: true; message: string }
@@ -10,7 +11,13 @@ type ActionState =
 
 export async function setActiveVenue(venueId: string): Promise<ActionState> {
   if (!venueId) {
-    return { ok: false, message: "Boliche inválido" };
+    return { ok: false, message: "Boliche invÃ¡lido" };
+  }
+
+  const currentUser = await getCurrentAppUser();
+
+  if (!currentUser) {
+    return { ok: false, message: "No autorizado" };
   }
 
   const venue = await prisma.venue.findUnique({
@@ -20,6 +27,22 @@ export async function setActiveVenue(venueId: string): Promise<ActionState> {
 
   if (!venue) {
     return { ok: false, message: "El boliche no existe" };
+  }
+
+  if (currentUser.role !== "SUPER_ADMIN") {
+    const membership = await prisma.membership.findFirst({
+      where: {
+        venueId,
+        user: {
+          clerkUserId: currentUser.clerkUserId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      return { ok: false, message: "No tenÃ©s acceso a este boliche" };
+    }
   }
 
   const cookieStore = await cookies();

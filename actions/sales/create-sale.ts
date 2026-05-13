@@ -1,7 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { MovementType, PaymentMethod, Prisma, SaleType } from "@prisma/client";
+import {
+  MovementType,
+  PaymentMethod,
+  Prisma,
+  SaleType,
+  StockMovementType,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import {
@@ -29,7 +35,7 @@ export async function createSale(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -97,21 +103,29 @@ export async function createSale(
   await prisma.$transaction(async (tx) => {
     const createdSale = await tx.sale.create({
       data: {
+        venueId: night.venueId,
         nightId,
         type: SaleType.BAR,
+        subtotal: total,
         total,
         items: {
           create: items.map((item) => {
             const product = productMap.get(item.productId);
 
             if (!product) {
-              throw new Error("Producto inválido al crear la venta");
+              throw new Error("Producto invÃ¡lido al crear la venta");
             }
 
             return {
               productId: item.productId,
               quantity: item.quantity,
               price: product.price,
+              unitCost: product.cost ?? null,
+              total: product.price * item.quantity,
+              grossProfit:
+                product.cost !== null && product.cost !== undefined
+                  ? (product.price - product.cost) * item.quantity
+                  : null,
             };
           }),
         },
@@ -130,7 +144,7 @@ export async function createSale(
       const product = productMap.get(item.productId);
 
       if (!product) {
-        throw new Error("Producto inválido al actualizar stock");
+        throw new Error("Producto invÃ¡lido al actualizar stock");
       }
 
       const stock = product.stock;
@@ -150,8 +164,12 @@ export async function createSale(
 
       await tx.stockMovement.create({
         data: {
+          venueId: night.venueId,
+          nightId,
           productId: product.id,
+          type: StockMovementType.SALE,
           quantity: -item.quantity,
+          unitCost: product.cost ?? null,
           note: `Venta ${createdSale.id}`,
         },
       });
@@ -162,6 +180,7 @@ export async function createSale(
         data: {
           cashBoxId: night.cashBox.id,
           type: MovementType.INCOME,
+          category: "SALE",
           amount: total,
           method: paymentMethod as PaymentMethod,
           note: `Ingreso por venta ${createdSale.id}`,

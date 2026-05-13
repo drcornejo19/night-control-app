@@ -26,12 +26,14 @@ type Row = {
   quantity: number;
 };
 
+type PaymentMethodValue = "CASH" | "TRANSFER" | "CARD" | "QR" | "OTHER";
+
 export function NewSaleForm({ nights, products }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [nightId, setNightId] = useState(nights[0]?.id ?? "");
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "TRANSFER" | "CARD" | "OTHER">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue>("CASH");
   const [rows, setRows] = useState<Row[]>([{ productId: products[0]?.id ?? "", quantity: 1 }]);
   const [message, setMessage] = useState<string>("");
 
@@ -96,17 +98,18 @@ export function NewSaleForm({ nights, products }: Props) {
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <label className="mb-2 block text-sm font-medium text-white">Método de pago</label>
+          <label className="mb-2 block text-sm font-medium text-white">MÃ©todo de pago</label>
           <select
             value={paymentMethod}
             onChange={(e) =>
-              setPaymentMethod(e.target.value as "CASH" | "TRANSFER" | "CARD" | "OTHER")
+              setPaymentMethod(e.target.value as PaymentMethodValue)
             }
             className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
           >
             <option value="CASH">Efectivo</option>
             <option value="TRANSFER">Transferencia</option>
             <option value="CARD">Tarjeta</option>
+            <option value="QR">QR</option>
             <option value="OTHER">Otro</option>
           </select>
         </div>
@@ -130,7 +133,7 @@ export function NewSaleForm({ nights, products }: Props) {
                 >
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
-                      {product.name} — Stock: {product.stock} — ${product.price}
+                      {product.name} â€” Stock: {product.stock} â€” ${product.price}
                     </option>
                   ))}
                 </select>

@@ -25,7 +25,7 @@ export async function inviteUser(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -33,7 +33,7 @@ export async function inviteUser(
 
   const venue = await prisma.venue.findUnique({
     where: { id: venueId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, companyId: true },
   });
 
   if (!venue) {
@@ -47,6 +47,7 @@ export async function inviteUser(
       emailAddress: email,
       ignoreExisting: true,
       publicMetadata: {
+        companyId: venue.companyId,
         invitedVenueId: venueId,
         invitedRole: role,
         invitedByApp: "night-control",
@@ -57,13 +58,13 @@ export async function inviteUser(
 
     return {
       ok: true,
-      message: `Invitación enviada a ${email} para ${venue.name}`,
+      message: `InvitaciÃ³n enviada a ${email} para ${venue.name}`,
     };
   } catch (error) {
     console.error("inviteUser error", error);
     return {
       ok: false,
-      message: "No se pudo enviar la invitación",
+      message: "No se pudo enviar la invitaciÃ³n",
     };
   }
 }

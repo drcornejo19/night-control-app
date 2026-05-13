@@ -23,7 +23,7 @@ export async function createMembership(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -36,7 +36,7 @@ export async function createMembership(
     }),
     prisma.venue.findUnique({
       where: { id: venueId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, companyId: true },
     }),
     prisma.membership.findUnique({
       where: {
@@ -71,6 +71,13 @@ export async function createMembership(
       role,
     },
   });
+
+  if (venue.companyId) {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { companyId: venue.companyId },
+    });
+  }
 
   revalidatePath("/admin/users");
 

@@ -9,7 +9,7 @@ export const createNightSchema = z.object({
 
 export const updateNightStatusSchema = z.object({
   nightId: z.string().min(1, "Noche requerida"),
-  status: z.enum(["OPEN", "CLOSED", "CANCELLED"]),
+  status: z.enum(["OPEN", "CLOSED", "AUDITED", "CANCELLED"]),
 });
 
 export type CreateNightInput = z.infer<typeof createNightSchema>;

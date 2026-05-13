@@ -3,14 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { inviteUser } from "@/actions/admin/invite-user";
-
-type RoleValue =
-  | "SUPER_ADMIN"
-  | "OWNER"
-  | "MANAGER"
-  | "CASHIER"
-  | "BAR"
-  | "SECURITY";
+import { appRoles, roleLabels, type AppRole } from "@/lib/constants/roles";
 
 type VenueOption = {
   id: string;
@@ -21,22 +14,13 @@ type InviteUserFormProps = {
   venues: VenueOption[];
 };
 
-const ROLE_OPTIONS: RoleValue[] = [
-  "SUPER_ADMIN",
-  "OWNER",
-  "MANAGER",
-  "CASHIER",
-  "BAR",
-  "SECURITY",
-];
-
 export function InviteUserForm({ venues }: InviteUserFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [email, setEmail] = useState("");
   const [venueId, setVenueId] = useState(venues[0]?.id ?? "");
-  const [role, setRole] = useState<RoleValue>("CASHIER");
+  const [role, setRole] = useState<AppRole>("CASHIER");
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -96,12 +80,12 @@ export function InviteUserForm({ venues }: InviteUserFormProps) {
         </label>
         <select
           value={role}
-          onChange={(e) => setRole(e.target.value as RoleValue)}
+          onChange={(e) => setRole(e.target.value as AppRole)}
           className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
         >
-          {ROLE_OPTIONS.map((option) => (
+          {appRoles.map((option) => (
             <option key={option} value={option} className="bg-[#111111]">
-              {option}
+              {roleLabels[option]}
             </option>
           ))}
         </select>

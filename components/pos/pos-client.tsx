@@ -32,14 +32,14 @@ type PosClientProps = {
   nights: NightOption[];
 };
 
+type PaymentMethodValue = "CASH" | "TRANSFER" | "CARD" | "QR" | "OTHER";
+
 export function PosClient({ products, nights }: PosClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [nightId, setNightId] = useState(nights[0]?.id ?? "");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "CASH" | "TRANSFER" | "CARD" | "OTHER"
-  >("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue>("CASH");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [message, setMessage] = useState("");
 
@@ -114,12 +114,12 @@ export function PosClient({ products, nights }: PosClientProps) {
     setMessage("");
 
     if (!nightId) {
-      setMessage("Seleccioná una noche.");
+      setMessage("SeleccionÃ¡ una noche.");
       return;
     }
 
     if (cart.length === 0) {
-      setMessage("Agregá al menos un producto.");
+      setMessage("AgregÃ¡ al menos un producto.");
       return;
     }
 
@@ -151,7 +151,7 @@ export function PosClient({ products, nights }: PosClientProps) {
               Productos
             </h2>
             <p className="mt-2 text-sm text-zinc-400">
-              Tocá un producto para agregarlo al carrito.
+              TocÃ¡ un producto para agregarlo al carrito.
             </p>
           </div>
 
@@ -171,15 +171,14 @@ export function PosClient({ products, nights }: PosClientProps) {
             <select
               value={paymentMethod}
               onChange={(e) =>
-                setPaymentMethod(
-                  e.target.value as "CASH" | "TRANSFER" | "CARD" | "OTHER"
-                )
+                setPaymentMethod(e.target.value as PaymentMethodValue)
               }
               className="rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
             >
               <option value="CASH">Efectivo</option>
               <option value="TRANSFER">Transferencia</option>
               <option value="CARD">Tarjeta</option>
+              <option value="QR">QR</option>
               <option value="OTHER">Otro</option>
             </select>
           </div>
@@ -212,7 +211,7 @@ export function PosClient({ products, nights }: PosClientProps) {
             Carrito
           </h2>
           <p className="mt-2 text-sm text-zinc-400">
-            Revisá la venta antes de cobrar.
+            RevisÃ¡ la venta antes de cobrar.
           </p>
         </div>
 

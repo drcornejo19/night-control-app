@@ -1,15 +1,46 @@
-import type { AppRole } from "@/lib/auth";
+import type { AppRole } from "@/lib/constants/roles";
+
+const ownerRoles = ["SUPER_ADMIN", "OWNER"] satisfies AppRole[];
+const managerRoles = [
+  "SUPER_ADMIN",
+  "OWNER",
+  "MANAGER",
+  "GERENTE",
+  "ENCARGADO",
+] satisfies AppRole[];
+
+const operatorRoles = [
+  "SUPER_ADMIN",
+  "OWNER",
+  "MANAGER",
+  "GERENTE",
+  "ENCARGADO",
+  "CASHIER",
+  "CAJERO",
+] satisfies AppRole[];
+
+const barRoles = [
+  "SUPER_ADMIN",
+  "OWNER",
+  "MANAGER",
+  "GERENTE",
+  "ENCARGADO",
+  "CASHIER",
+  "CAJERO",
+  "BAR",
+  "BARRA",
+] satisfies AppRole[];
 
 export const permissions = {
-  dashboard: ["SUPER_ADMIN", "OWNER", "MANAGER"] satisfies AppRole[],
-  pos: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "BAR"] satisfies AppRole[],
-  salesCreate: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "BAR"] satisfies AppRole[],
-  expensesCreate: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"] satisfies AppRole[],
-  purchasesCreate: ["SUPER_ADMIN", "OWNER", "MANAGER"] satisfies AppRole[],
-  cashOpenClose: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"] satisfies AppRole[],
-  manageProducts: ["SUPER_ADMIN", "OWNER", "MANAGER"] satisfies AppRole[],
-  manageSuppliers: ["SUPER_ADMIN", "OWNER", "MANAGER"] satisfies AppRole[],
-  manageNights: ["SUPER_ADMIN", "OWNER", "MANAGER"] satisfies AppRole[],
-  manageVenues: ["SUPER_ADMIN"] satisfies AppRole[],
-  manageUsers: ["SUPER_ADMIN", "OWNER"] satisfies AppRole[],
+  dashboard: [...managerRoles, "AUDITOR"] satisfies AppRole[],
+  pos: barRoles,
+  salesCreate: barRoles,
+  expensesCreate: operatorRoles,
+  purchasesCreate: managerRoles,
+  cashOpenClose: operatorRoles,
+  manageProducts: managerRoles,
+  manageSuppliers: managerRoles,
+  manageNights: managerRoles,
+  manageVenues: ownerRoles,
+  manageUsers: ownerRoles,
 };

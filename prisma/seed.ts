@@ -1,17 +1,34 @@
-import { PrismaClient, UserRole, NightStatus, PaymentMethod, SaleType, ExpenseCategory } from "@prisma/client";
+import {
+  ExpenseCategory,
+  NightStatus,
+  PaymentMethod,
+  PrismaClient,
+  SaleType,
+  UserRole,
+} from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const company = await prisma.company.upsert({
+    where: { slug: "night-control-demo" },
+    update: {},
+    create: {
+      slug: "night-control-demo",
+      commercialName: "Night Control Demo",
+    },
+  });
+
   // VENUE
   const venue = await prisma.venue.create({
     data: {
+      companyId: company.id,
       name: "Night Control Club",
       city: "Buenos Aires",
     },
   });
 
-  const supplier = await prisma.supplier.create({
+  await prisma.supplier.create({
   data: {
     venueId: venue.id,
     name: "Distribuidora Central",
@@ -23,6 +40,8 @@ async function main() {
   where: { email: "admin@night.com" },
   update: {},
   create: {
+    companyId: company.id,
+    clerkUserId: "seed_admin_night_control",
     name: "Admin",
     email: "admin@night.com",
     role: UserRole.OWNER,
@@ -71,7 +90,7 @@ async function main() {
   // NIGHT
   const night = await prisma.night.create({
     data: {
-      name: "Sábado Explosivo",
+      name: "SÃ¡bado Explosivo",
       date: new Date(),
       venueId: venue.id,
       status: NightStatus.OPEN,
@@ -85,8 +104,9 @@ async function main() {
   });
 
   // SALES
-  const sale1 = await prisma.sale.create({
+  await prisma.sale.create({
     data: {
+      venueId: venue.id,
       nightId: night.id,
       type: SaleType.BAR,
       total: 16000,
@@ -111,8 +131,9 @@ async function main() {
     },
   });
 
-  const sale2 = await prisma.sale.create({
+  await prisma.sale.create({
     data: {
+      venueId: venue.id,
       nightId: night.id,
       type: SaleType.BAR,
       total: 9000,
@@ -157,7 +178,7 @@ async function main() {
     },
   });
 
-  console.log("🔥 Seed completado");
+  console.log("ðŸ”¥ Seed completado");
 }
 
 main()

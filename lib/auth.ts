@@ -1,14 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/db";
 import { getActiveVenueId } from "@/lib/venues/active-venue";
-
-export type AppRole =
-  | "SUPER_ADMIN"
-  | "OWNER"
-  | "MANAGER"
-  | "CASHIER"
-  | "BAR"
-  | "SECURITY";
+import { isAppRole, type AppRole } from "@/lib/constants/roles";
 
 export async function requireUser() {
   const { userId } = await auth();
@@ -33,8 +26,11 @@ export async function getCurrentAppUser() {
     return null;
   }
 
-  const globalRole =
-    (user.publicMetadata?.role as AppRole | undefined) ?? "CASHIER";
+  const metadataRole = user.publicMetadata?.role;
+  const globalRole = isAppRole(metadataRole) ? metadataRole : "CASHIER";
+
+  const companyId =
+    (user.publicMetadata?.companyId as string | undefined) ?? null;
 
   const venueId =
     (user.publicMetadata?.venueId as string | undefined) ?? null;
@@ -52,6 +48,7 @@ export async function getCurrentAppUser() {
     lastName: user.lastName ?? "",
     fullName: [user.firstName, user.lastName].filter(Boolean).join(" "),
     role: globalRole,
+    companyId,
     venueId,
     invitedVenueId,
     invitedRole,

@@ -12,20 +12,33 @@ export async function syncCurrentUser() {
     return { ok: false, message: "No autenticado" };
   }
 
+  const fallbackCompany = await prisma.company.upsert({
+    where: { slug: "night-control-demo" },
+    update: {},
+    create: {
+      slug: "night-control-demo",
+      commercialName: "Night Control Demo",
+    },
+  });
+
   const dbUser = await prisma.user.upsert({
     where: {
       clerkUserId: user.clerkUserId,
     },
     update: {
+      companyId: user.companyId ?? fallbackCompany.id,
       name: user.fullName || user.email,
       email: user.email,
       role: user.role,
+      lastLoginAt: new Date(),
     },
     create: {
+      companyId: user.companyId ?? fallbackCompany.id,
       clerkUserId: user.clerkUserId,
       name: user.fullName || user.email,
       email: user.email,
       role: user.role,
+      lastLoginAt: new Date(),
     },
   });
 

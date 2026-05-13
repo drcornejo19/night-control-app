@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { openCashSchema } from "@/lib/validations/cash";
 
-export async function openCash(input: any) {
+export async function openCash(input: unknown) {
   const parsed = openCashSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -18,7 +18,7 @@ export async function openCash(input: any) {
   });
 
   if (existing) {
-    return { ok: false, message: "La caja ya está abierta para esta noche" };
+    return { ok: false, message: "La caja ya estÃ¡ abierta para esta noche" };
   }
 
   await prisma.cashBox.create({

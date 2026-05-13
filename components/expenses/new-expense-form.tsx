@@ -14,6 +14,8 @@ type Props = {
   nights: NightOption[];
 };
 
+type PaymentMethodValue = "CASH" | "TRANSFER" | "CARD" | "QR" | "OTHER";
+
 export function NewExpenseForm({ nights }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -22,9 +24,7 @@ export function NewExpenseForm({ nights }: Props) {
   const [category, setCategory] = useState<
     "STAFF" | "DJ" | "SUPPLIER" | "SERVICES" | "OTHER"
   >("OTHER");
-  const [paymentMethod, setPaymentMethod] = useState<
-    "CASH" | "TRANSFER" | "CARD" | "OTHER"
-  >("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue>("CASH");
   const [amount, setAmount] = useState<number>(0);
   const [note, setNote] = useState("");
   const [message, setMessage] = useState("");
@@ -73,7 +73,7 @@ export function NewExpenseForm({ nights }: Props) {
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <label className="mb-2 block text-sm font-medium text-white">
-            Categoría
+            CategorÃ­a
           </label>
           <select
             value={category}
@@ -104,15 +104,14 @@ export function NewExpenseForm({ nights }: Props) {
           <select
             value={paymentMethod}
             onChange={(e) =>
-              setPaymentMethod(
-                e.target.value as "CASH" | "TRANSFER" | "CARD" | "OTHER"
-              )
+              setPaymentMethod(e.target.value as PaymentMethodValue)
             }
             className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
           >
             <option value="CASH">Efectivo</option>
             <option value="TRANSFER">Transferencia</option>
             <option value="CARD">Tarjeta</option>
+            <option value="QR">QR</option>
             <option value="OTHER">Otro</option>
           </select>
         </div>
@@ -134,7 +133,7 @@ export function NewExpenseForm({ nights }: Props) {
 
       <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <label className="mb-2 block text-sm font-medium text-white">
-          Observación
+          ObservaciÃ³n
         </label>
         <textarea
           value={note}

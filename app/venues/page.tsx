@@ -1,15 +1,13 @@
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
+import type { Venue } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 
-type VenueRow = Prisma.VenueGetPayload<{}>;
-
 export default async function VenuesPage() {
   const venues = (await prisma.venue.findMany({
     orderBy: { createdAt: "desc" },
-  })) as VenueRow[];
+  })) as Venue[];
 
   return (
     <AppShell>

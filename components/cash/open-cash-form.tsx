@@ -1,16 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { type FormEvent, useState, useTransition } from "react";
 import { openCash } from "@/actions/cash/open-cash";
 import { useRouter } from "next/navigation";
 
-export function OpenCashForm({ nights }: any) {
+type NightOption = {
+  id: string;
+  name: string;
+};
+
+type OpenCashFormProps = {
+  nights: NightOption[];
+};
+
+export function OpenCashForm({ nights }: OpenCashFormProps) {
   const [nightId, setNightId] = useState(nights[0]?.id || "");
   const [opening, setOpening] = useState(0);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  function submit(e: any) {
+  function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     startTransition(async () => {
@@ -27,7 +36,7 @@ export function OpenCashForm({ nights }: any) {
   return (
     <form onSubmit={submit} className="space-y-4">
       <select value={nightId} onChange={(e) => setNightId(e.target.value)}>
-        {nights.map((n: any) => (
+        {nights.map((n) => (
           <option key={n.id} value={n.id}>
             {n.name}
           </option>

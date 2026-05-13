@@ -2,6 +2,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { PurchasePaymentStatus, StockMovementType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   createPurchaseSchema,
@@ -20,7 +21,7 @@ export async function createPurchase(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -69,14 +70,18 @@ export async function createPurchase(
   await prisma.$transaction(async (tx) => {
     const purchase = await tx.purchase.create({
       data: {
+        venueId: supplier.venueId,
         nightId: nightId || null,
         supplierId,
         total,
+        paymentStatus: PurchasePaymentStatus.PENDING,
         items: {
           create: items.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
             cost: item.cost,
+            unitCost: item.cost,
+            total: item.quantity * item.cost,
           })),
         },
       },
@@ -86,7 +91,7 @@ export async function createPurchase(
       const product = productMap.get(item.productId);
 
       if (!product) {
-        throw new Error("Producto inválido al actualizar stock");
+        throw new Error("Producto invÃ¡lido al actualizar stock");
       }
 
       if (product.stock) {
@@ -110,8 +115,12 @@ export async function createPurchase(
 
       await tx.stockMovement.create({
         data: {
+          venueId: supplier.venueId,
+          nightId: nightId || null,
           productId: product.id,
+          type: StockMovementType.PURCHASE,
           quantity: item.quantity,
+          unitCost: item.cost,
           note: `Compra ${purchase.id}`,
         },
       });

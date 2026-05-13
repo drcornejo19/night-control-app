@@ -11,6 +11,35 @@ datasource db {
 // ENUMS
 //////////////////////
 
+enum CompanyPlan {
+  STARTER
+  PRO
+  PREMIUM
+  ENTERPRISE
+}
+
+enum CompanyStatus {
+  ACTIVE
+  TRIALING
+  SUSPENDED
+  CANCELLED
+}
+
+enum VenueStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum BusinessType {
+  BOLICHE
+  BAR
+  RESTAURANTE
+  HAMBURGUESERIA
+  EVENTO
+  OTRO
+}
+
 enum UserRole {
   SUPER_ADMIN
   OWNER
@@ -18,18 +47,31 @@ enum UserRole {
   CASHIER
   BAR
   SECURITY
+  GERENTE
+  ENCARGADO
+  CAJERO
+  BARRA
+  SEGURIDAD
+  AUDITOR
 }
 
 enum NightStatus {
   OPEN
   CLOSED
+  AUDITED
   CANCELLED
+}
+
+enum CashBoxStatus {
+  OPEN
+  CLOSED
 }
 
 enum PaymentMethod {
   CASH
   TRANSFER
   CARD
+  QR
   OTHER
 }
 
@@ -37,6 +79,9 @@ enum SaleType {
   BAR
   TICKET
   VIP
+  TABLE
+  DELIVERY
+  OTHER
 }
 
 enum ExpenseCategory {
@@ -47,38 +92,143 @@ enum ExpenseCategory {
   OTHER
 }
 
+enum ExpenseCategoryType {
+  FIXED
+  VARIABLE
+  OPERATIONAL
+  EXTRAORDINARY
+}
+
 enum MovementType {
   INCOME
   EXPENSE
+  ADJUSTMENT
+}
+
+enum StockMovementType {
+  PURCHASE
+  SALE
+  ADJUSTMENT
+  WASTE
+  INTERNAL_CONSUMPTION
+  INITIAL_STOCK
+  FINAL_STOCK
+}
+
+enum CategoryType {
+  BEBIDA
+  COMIDA
+  INSUMO
+  ENTRADA
+  OTRO
+}
+
+enum PurchasePaymentStatus {
+  PAID
+  PENDING
+  PARTIAL
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum FixedCostPeriodicity {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum VariableCostRelationType {
+  PER_SESSION
+  PER_SALE
+  PER_ATTENDEE
+  PER_PRODUCT
+  OTHER
 }
 
 //////////////////////
 // CORE MULTI-TENANT
 //////////////////////
 
-model User {
-  id          String   @id @default(cuid())
-  clerkUserId String   @unique
-  name        String
-  email       String   @unique
-  role        UserRole
-  createdAt   DateTime @default(now())
+model Company {
+  id             String        @id @default(cuid())
+  slug           String        @unique
+  commercialName String
+  legalName      String?
+  taxId          String?
+  plan           CompanyPlan   @default(STARTER)
+  status         CompanyStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  memberships Membership[]
-  sales       Sale[]
-  expenses    Expense[]
+  users  User[]
+  venues Venue[]
+}
+
+model User {
+  id          String    @id @default(cuid())
+  companyId   String?
+  clerkUserId String    @unique
+  name        String
+  lastName    String?
+  email       String    @unique
+  role        UserRole
+  phone       String?
+  active      Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  company           Company?        @relation(fields: [companyId], references: [id])
+  memberships       Membership[]
+  sales             Sale[]
+  expenses          Expense[]
+  cashMovements     CashMovement[]
+  openedCashBoxes   CashBox[]       @relation("CashBoxOpenedBy")
+  closedCashBoxes   CashBox[]       @relation("CashBoxClosedBy")
+  responsibleNights Night[]         @relation("NightResponsible")
+  stockMovements    StockMovement[] @relation("StockMovementCreatedBy")
+  ticketSales       TicketSale[]    @relation("TicketSaleSoldBy")
+
+  @@index([companyId])
 }
 
 model Venue {
-  id        String   @id @default(cuid())
-  name      String
-  city      String?
-  createdAt DateTime @default(now())
+  id           String       @id @default(cuid())
+  companyId    String?
+  name         String
+  address      String?
+  city         String?
+  capacity     Int?
+  businessType BusinessType @default(BOLICHE)
+  timezone     String       @default("America/Argentina/Buenos_Aires")
+  status       VenueStatus  @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  memberships Membership[]
-  nights      Night[]
-  products    Product[]
-  suppliers   Supplier[]
+  company                Company?                @relation(fields: [companyId], references: [id])
+  memberships            Membership[]
+  nights                 Night[]
+  products               Product[]
+  categories             Category[]
+  suppliers              Supplier[]
+  sales                  Sale[]
+  purchases              Purchase[]
+  expenses               Expense[]
+  stockMovements         StockMovement[]
+  ticketTypes            TicketType[]
+  expenseCategoryConfigs ExpenseCategoryConfig[]
+  fixedCosts             FixedCost[]
+  variableCosts          VariableCost[]
+  breakEvenScenarios     BreakEvenScenario[]
+
+  @@index([companyId])
+  @@index([businessType])
+  @@index([status])
 }
 
 model Membership {
@@ -91,30 +241,43 @@ model Membership {
   venue Venue @relation(fields: [venueId], references: [id])
 
   @@unique([userId, venueId])
+  @@index([venueId, role])
 }
 
 //////////////////////
-// NIGHT CORE
+// OPERATING SESSION
 //////////////////////
 
 model Night {
-  id       String      @id @default(cuid())
-  venueId  String
-  name     String
-  date     DateTime
-  status   NightStatus @default(OPEN)
-  openedAt DateTime?
-  closedAt DateTime?
+  id                String      @id @default(cuid())
+  venueId           String
+  responsibleUserId String?
+  name              String
+  date              DateTime
+  status            NightStatus @default(OPEN)
+  openedAt          DateTime?
+  closedAt          DateTime?
+  observations      String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  venue Venue @relation(fields: [venueId], references: [id])
+  venue           Venue @relation(fields: [venueId], references: [id])
+  responsibleUser User? @relation("NightResponsible", fields: [responsibleUserId], references: [id])
 
-  cashBox   CashBox?
-  sales     Sale[]
-  expenses  Expense[]
-  purchases Purchase[]
-  tickets   TicketSale[]
+  cashBox            CashBox?
+  sales              Sale[]
+  expenses           Expense[]
+  purchases          Purchase[]
+  tickets            TicketSale[]
+  shiftSummaries     ShiftSummary[]
+  reservations       Reservation[]
+  stockControls      SessionStockControl[]
+  stockMovements     StockMovement[]
+  variableCosts      VariableCost[]
+  breakEvenScenarios BreakEvenScenario[]
 
-  createdAt DateTime @default(now())
+  @@index([venueId, status])
+  @@index([date])
 }
 
 //////////////////////
@@ -122,32 +285,43 @@ model Night {
 //////////////////////
 
 model CashBox {
-  id         String @id @default(cuid())
-  nightId    String @unique
+  id         String        @id @default(cuid())
+  nightId    String        @unique
   opening    Float
   closing    Float?
   expected   Float?
   difference Float?
+  status     CashBoxStatus @default(OPEN)
+  openedById String?
+  closedById String?
+  openedAt   DateTime      @default(now())
+  closedAt   DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
-  night Night @relation(fields: [nightId], references: [id])
+  night    Night @relation(fields: [nightId], references: [id])
+  openedBy User? @relation("CashBoxOpenedBy", fields: [openedById], references: [id])
+  closedBy User? @relation("CashBoxClosedBy", fields: [closedById], references: [id])
 
   movements CashMovement[]
-
-  createdAt DateTime @default(now())
 }
 
 model CashMovement {
-  id        String       @id @default(cuid())
+  id        String         @id @default(cuid())
   cashBoxId String
+  userId    String?
   type      MovementType
+  category  String?
   amount    Float
   note      String?
-
-  method PaymentMethod?
+  method    PaymentMethod?
+  createdAt DateTime       @default(now())
 
   cashBox CashBox @relation(fields: [cashBoxId], references: [id])
+  user    User?   @relation(fields: [userId], references: [id])
 
-  createdAt DateTime @default(now())
+  @@index([cashBoxId, type])
+  @@index([method])
 }
 
 //////////////////////
@@ -155,27 +329,36 @@ model CashMovement {
 //////////////////////
 
 model Sale {
-  id      String   @id @default(cuid())
-  nightId String
-  userId  String?
-  type    SaleType
-  total   Float
+  id        String   @id @default(cuid())
+  venueId   String?
+  nightId   String
+  userId    String?
+  type      SaleType
+  subtotal  Float?
+  discount  Float    @default(0)
+  total     Float
+  createdAt DateTime @default(now())
 
-  night Night @relation(fields: [nightId], references: [id])
-  user  User? @relation(fields: [userId], references: [id])
+  venue Venue? @relation(fields: [venueId], references: [id])
+  night Night  @relation(fields: [nightId], references: [id])
+  user  User?  @relation(fields: [userId], references: [id])
 
   items    SaleItem[]
   payments Payment[]
 
-  createdAt DateTime @default(now())
+  @@index([venueId])
+  @@index([nightId, createdAt])
 }
 
 model SaleItem {
-  id        String @id @default(cuid())
-  saleId    String
-  productId String
-  quantity  Int
-  price     Float
+  id          String @id @default(cuid())
+  saleId      String
+  productId   String
+  quantity    Int
+  price       Float
+  unitCost    Float?
+  total       Float?
+  grossProfit Float?
 
   sale    Sale    @relation(fields: [saleId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -188,48 +371,127 @@ model Payment {
   amount Float
 
   sale Sale @relation(fields: [saleId], references: [id])
+
+  @@index([method])
+}
+
+model ShiftSummary {
+  id            String   @id @default(cuid())
+  nightId       String
+  sector        String
+  cashSales     Float    @default(0)
+  transferSales Float    @default(0)
+  cardSales     Float    @default(0)
+  qrSales       Float    @default(0)
+  totalSales    Float    @default(0)
+  observations  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  night Night @relation(fields: [nightId], references: [id])
+
+  @@index([nightId])
 }
 
 //////////////////////
 // PRODUCTS & STOCK
 //////////////////////
 
+model Category {
+  id        String       @id @default(cuid())
+  venueId   String
+  name      String
+  type      CategoryType @default(OTRO)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  venue    Venue     @relation(fields: [venueId], references: [id])
+  products Product[]
+
+  @@unique([venueId, name])
+}
+
 model Product {
-  id      String @id @default(cuid())
-  venueId String
-  name    String
-  price   Float
-  cost    Float?
+  id         String   @id @default(cuid())
+  venueId    String
+  categoryId String?
+  name       String
+  sku        String?
+  unit       String   @default("unit")
+  price      Float
+  salePrice  Float?
+  cost       Float?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  venue Venue @relation(fields: [venueId], references: [id])
+  venue    Venue     @relation(fields: [venueId], references: [id])
+  category Category? @relation(fields: [categoryId], references: [id])
 
-  stock Stock?
-  items SaleItem[]
+  stock         Stock?
+  items         SaleItem[]
+  stockControls SessionStockControl[]
 
   movements     StockMovement[]
   purchaseItems PurchaseItem[]
 
-  createdAt DateTime @default(now())
+  @@index([venueId, active])
+  @@index([categoryId])
 }
 
 model Stock {
-  id        String @id @default(cuid())
-  productId String @unique
-  quantity  Int
-  minStock  Int
+  id          String   @id @default(cuid())
+  productId   String   @unique
+  quantity    Int
+  minStock    Int
+  averageCost Float?
+  stockValue  Float?
+  updatedAt   DateTime @updatedAt
 
   product Product @relation(fields: [productId], references: [id])
 }
 
 model StockMovement {
-  id        String  @id @default(cuid())
-  productId String
-  quantity  Int
-  note      String?
+  id          String            @id @default(cuid())
+  venueId     String?
+  nightId     String?
+  productId   String
+  createdById String?
+  type        StockMovementType @default(ADJUSTMENT)
+  quantity    Int
+  unitCost    Float?
+  note        String?
+  createdAt   DateTime          @default(now())
 
+  venue     Venue?  @relation(fields: [venueId], references: [id])
+  night     Night?  @relation(fields: [nightId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  createdBy User?   @relation("StockMovementCreatedBy", fields: [createdById], references: [id])
+
+  @@index([venueId, type])
+  @@index([nightId])
+  @@index([productId])
+}
+
+model SessionStockControl {
+  id                     String   @id @default(cuid())
+  nightId                String
+  productId              String
+  initialQuantity        Int      @default(0)
+  finalQuantity          Int      @default(0)
+  theoreticalConsumption Int      @default(0)
+  realConsumption        Int      @default(0)
+  deviation              Int      @default(0)
+  stockValueStart        Float?
+  stockValueEnd          Float?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  night   Night   @relation(fields: [nightId], references: [id])
   product Product @relation(fields: [productId], references: [id])
 
-  createdAt DateTime @default(now())
+  @@unique([nightId, productId])
+  @@index([productId])
 }
 
 //////////////////////
@@ -237,10 +499,15 @@ model StockMovement {
 //////////////////////
 
 model Supplier {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   venueId   String
   name      String
-  createdAt DateTime @default(now())
+  contact   String?
+  phone     String?
+  email     String?
+  status    VenueStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
 
   venue Venue @relation(fields: [venueId], references: [id])
 
@@ -248,17 +515,26 @@ model Supplier {
 }
 
 model Purchase {
-  id         String  @id @default(cuid())
-  nightId    String?
-  supplierId String
-  total      Float
+  id            String                @id @default(cuid())
+  venueId       String?
+  nightId       String?
+  supplierId    String
+  date          DateTime              @default(now())
+  total         Float
+  paymentStatus PurchasePaymentStatus @default(PENDING)
+  paymentMethod PaymentMethod?
+  observations  String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
+  venue    Venue?   @relation(fields: [venueId], references: [id])
   supplier Supplier @relation(fields: [supplierId], references: [id])
   night    Night?   @relation(fields: [nightId], references: [id])
 
   items PurchaseItem[]
 
-  createdAt DateTime @default(now())
+  @@index([venueId])
+  @@index([supplierId])
 }
 
 model PurchaseItem {
@@ -267,42 +543,169 @@ model PurchaseItem {
   productId  String
   quantity   Int
   cost       Float
+  unitCost   Float?
+  total      Float?
 
   purchase Purchase @relation(fields: [purchaseId], references: [id])
   product  Product  @relation(fields: [productId], references: [id])
 }
 
 //////////////////////
-// EXPENSES
+// TICKETS & RESERVATIONS
 //////////////////////
 
-model Expense {
-  id       String          @id @default(cuid())
-  nightId  String?
-  userId   String?
-  category ExpenseCategory
-  amount   Float
-  note     String?
-
-  night Night? @relation(fields: [nightId], references: [id])
-  user  User?  @relation(fields: [userId], references: [id])
-
+model TicketType {
+  id        String   @id @default(cuid())
+  venueId   String
+  name      String
+  price     Float
+  capacity  Int?
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  venue Venue        @relation(fields: [venueId], references: [id])
+  sales TicketSale[]
+
+  @@index([venueId, active])
 }
 
-//////////////////////
-// TICKETS
-//////////////////////
-
 model TicketSale {
-  id       String @id @default(cuid())
-  nightId  String
-  type     String
-  price    Float
-  quantity Int
+  id            String         @id @default(cuid())
+  nightId       String
+  ticketTypeId  String?
+  soldById      String?
+  type          String
+  price         Float
+  quantity      Int
+  total         Float?
+  paymentMethod PaymentMethod?
+  createdAt     DateTime       @default(now())
+
+  night      Night       @relation(fields: [nightId], references: [id])
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id])
+  soldBy     User?       @relation("TicketSaleSoldBy", fields: [soldById], references: [id])
+
+  @@index([nightId])
+  @@index([ticketTypeId])
+}
+
+model Reservation {
+  id            String            @id @default(cuid())
+  nightId       String
+  customerName  String
+  phone         String?
+  tableType     String?
+  peopleCount   Int               @default(0)
+  depositAmount Float             @default(0)
+  totalAmount   Float             @default(0)
+  status        ReservationStatus @default(PENDING)
+  observations  String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
   night Night @relation(fields: [nightId], references: [id])
 
-  createdAt DateTime @default(now())
+  @@index([nightId, status])
 }
 
+//////////////////////
+// EXPENSES & COSTS
+//////////////////////
+
+model ExpenseCategoryConfig {
+  id        String              @id @default(cuid())
+  venueId   String
+  name      String
+  type      ExpenseCategoryType @default(OPERATIONAL)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  venue    Venue     @relation(fields: [venueId], references: [id])
+  expenses Expense[]
+
+  @@unique([venueId, name])
+}
+
+model Expense {
+  id                String          @id @default(cuid())
+  venueId           String?
+  nightId           String?
+  userId            String?
+  expenseCategoryId String?
+  category          ExpenseCategory
+  amount            Float
+  description       String?
+  note              String?
+  paymentMethod     PaymentMethod?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  venue                 Venue?                 @relation(fields: [venueId], references: [id])
+  night                 Night?                 @relation(fields: [nightId], references: [id])
+  user                  User?                  @relation(fields: [userId], references: [id])
+  expenseCategoryConfig ExpenseCategoryConfig? @relation(fields: [expenseCategoryId], references: [id])
+
+  @@index([venueId])
+  @@index([nightId])
+}
+
+model FixedCost {
+  id          String               @id @default(cuid())
+  venueId     String
+  name        String
+  amount      Float
+  periodicity FixedCostPeriodicity
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, active])
+}
+
+model VariableCost {
+  id           String                   @id @default(cuid())
+  venueId      String
+  nightId      String?
+  name         String
+  amount       Float
+  relationType VariableCostRelationType
+  active       Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  venue Venue  @relation(fields: [venueId], references: [id])
+  night Night? @relation(fields: [nightId], references: [id])
+
+  @@index([venueId, active])
+  @@index([nightId])
+}
+
+//////////////////////
+// BREAK EVEN & REPORTING INPUTS
+//////////////////////
+
+model BreakEvenScenario {
+  id                    String   @id @default(cuid())
+  venueId               String
+  nightId               String?
+  name                  String
+  fixedCosts            Float    @default(0)
+  variableCosts         Float    @default(0)
+  expectedAverageTicket Float    @default(0)
+  expectedAttendees     Int      @default(0)
+  expectedRevenue       Float    @default(0)
+  contributionMargin    Float    @default(0)
+  breakEvenRevenue      Float    @default(0)
+  breakEvenAttendees    Int      @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  venue Venue  @relation(fields: [venueId], references: [id])
+  night Night? @relation(fields: [nightId], references: [id])
+
+  @@index([venueId])
+  @@index([nightId])
+}

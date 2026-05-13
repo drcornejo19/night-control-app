@@ -3,8 +3,9 @@
 import { prisma } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { closeCashSchema } from "@/lib/validations/cash";
+import { CashBoxStatus } from "@prisma/client";
 
-export async function closeCash(input: any) {
+export async function closeCash(input: unknown) {
   const parsed = closeCashSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -39,6 +40,8 @@ export async function closeCash(input: any) {
       closing,
       expected,
       difference,
+      status: CashBoxStatus.CLOSED,
+      closedAt: new Date(),
     },
   });
 

@@ -7,9 +7,6 @@ import {
   Wallet,
 } from "lucide-react";
 import type { PaymentMethod, Prisma } from "@prisma/client";
-import { requireRole } from "@/lib/auth";
-import { permissions } from "@/lib/permissions";
-import { syncCurrentUser } from "@/actions/auth/sync-user";
 
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
@@ -202,6 +199,7 @@ export default async function DashboardPage() {
     CASH: 0,
     TRANSFER: 0,
     CARD: 0,
+    QR: 0,
     OTHER: 0,
   };
 
@@ -215,6 +213,7 @@ export default async function DashboardPage() {
   const totalCash = paymentSummary.CASH;
   const totalTransfer = paymentSummary.TRANSFER;
   const totalCard = paymentSummary.CARD;
+  const totalQr = paymentSummary.QR;
   const totalOther = paymentSummary.OTHER;
 
   const productIds = topProductsRaw.map(
@@ -285,7 +284,7 @@ export default async function DashboardPage() {
             value={expenses}
             icon={Receipt}
             trend={expenses > 0 ? "down" : "neutral"}
-            changeLabel="Operación de la noche"
+            changeLabel="OperaciÃ³n de la noche"
           />
 
           <DashboardKpiCard
@@ -348,6 +347,10 @@ export default async function DashboardPage() {
                 value={formatCurrency(totalCard)}
               />
               <DashboardStatRow
+                label="Cobrado con QR"
+                value={formatCurrency(totalQr)}
+              />
+              <DashboardStatRow
                 label="Otros cobros"
                 value={formatCurrency(totalOther)}
               />
@@ -356,7 +359,7 @@ export default async function DashboardPage() {
 
           <DashboardSection
             title="Caja actual"
-            subtitle="Último cierre o caja activa detectada"
+            subtitle="Ãšltimo cierre o caja activa detectada"
           >
             <div className="space-y-4">
               <DashboardStatRow
@@ -387,7 +390,7 @@ export default async function DashboardPage() {
             <div className="space-y-3">
               {topProducts.length === 0 ? (
                 <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-400">
-                  No hay productos vendidos todavía.
+                  No hay productos vendidos todavÃ­a.
                 </div>
               ) : (
                 topProducts.map((product, index) => (
@@ -421,8 +424,8 @@ export default async function DashboardPage() {
           </DashboardSection>
 
           <DashboardSection
-            title="Últimas ventas"
-            subtitle="Operación reciente registrada"
+            title="Ãšltimas ventas"
+            subtitle="OperaciÃ³n reciente registrada"
           >
             <div className="space-y-3">
               {latestSales.length === 0 ? (
@@ -476,7 +479,7 @@ export default async function DashboardPage() {
 
         <section className="grid gap-6 xl:grid-cols-2">
           <DashboardSection
-            title="Últimos gastos"
+            title="Ãšltimos gastos"
             subtitle="Egresos operativos registrados"
           >
             <div className="space-y-3">
@@ -515,7 +518,7 @@ export default async function DashboardPage() {
 
           <DashboardSection
             title="Lectura gerencial"
-            subtitle="Indicadores rápidos para el dueño o encargado"
+            subtitle="Indicadores rÃ¡pidos para el dueÃ±o o encargado"
           >
             <div className="grid gap-4 md:grid-cols-2">
               <DashboardStatRow
@@ -548,7 +551,7 @@ export default async function DashboardPage() {
               />
               <DashboardStatRow
                 label="Estado general"
-                value={profit >= 0 ? "Rentable" : "En revisión"}
+                value={profit >= 0 ? "Rentable" : "En revisiÃ³n"}
               />
             </div>
           </DashboardSection>

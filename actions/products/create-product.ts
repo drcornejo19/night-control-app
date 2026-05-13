@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { StockMovementType } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import {
   createProductSchema,
@@ -19,7 +20,7 @@ export async function createProduct(
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos inválidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
     };
   }
 
@@ -74,8 +75,11 @@ export async function createProduct(
     if (initialStock > 0) {
       await tx.stockMovement.create({
         data: {
+          venueId,
           productId: product.id,
+          type: StockMovementType.INITIAL_STOCK,
           quantity: initialStock,
+          unitCost: cost ?? null,
           note: "Stock inicial",
         },
       });

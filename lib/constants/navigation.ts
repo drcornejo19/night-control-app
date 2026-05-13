@@ -13,7 +13,27 @@ import {
   ShoppingBag,
 } from "lucide-react";
 
-import type { AppRole } from "@/lib/auth";
+import type { AppRole } from "@/lib/constants/roles";
+
+const managerRoles = [
+  "SUPER_ADMIN",
+  "OWNER",
+  "MANAGER",
+  "GERENTE",
+  "ENCARGADO",
+] satisfies AppRole[];
+
+const operatorRoles = [
+  ...managerRoles,
+  "CASHIER",
+  "CAJERO",
+] satisfies AppRole[];
+
+const barRoles = [
+  ...operatorRoles,
+  "BAR",
+  "BARRA",
+] satisfies AppRole[];
 
 export type NavigationItem = {
   title: string;
@@ -27,61 +47,61 @@ export const navigationItems: NavigationItem[] = [
     title: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER"],
+    roles: [...managerRoles, "AUDITOR"],
   },
   {
     title: "POS",
     href: "/pos",
     icon: ScanLine,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "BAR"],
+    roles: barRoles,
   },
   {
     title: "Ventas",
     href: "/sales",
     icon: ShoppingBag,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER", "BAR"],
+    roles: barRoles,
   },
   {
     title: "Gastos",
     href: "/expenses",
     icon: Receipt,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"],
+    roles: operatorRoles,
   },
   {
     title: "Caja",
     href: "/cash",
     icon: Wallet,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER", "CASHIER"],
+    roles: operatorRoles,
   },
   {
     title: "Productos",
     href: "/products",
     icon: PackagePlus,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER"],
+    roles: managerRoles,
   },
   {
     title: "Compras",
     href: "/purchases",
     icon: ShoppingCart,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER"],
+    roles: managerRoles,
   },
   {
     title: "Proveedores",
     href: "/suppliers",
     icon: Truck,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER"],
+    roles: managerRoles,
   },
   {
     title: "Noches",
     href: "/nights",
     icon: CalendarRange,
-    roles: ["SUPER_ADMIN", "OWNER", "MANAGER"],
+    roles: managerRoles,
   },
   {
     title: "Boliches",
     href: "/venues",
     icon: Building2,
-    roles: ["SUPER_ADMIN"],
+    roles: ["SUPER_ADMIN", "OWNER"],
   },
   {
     title: "Usuarios",
