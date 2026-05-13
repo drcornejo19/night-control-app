@@ -1,12 +1,16 @@
 "use client";
 
 import { type FormEvent, useState, useTransition } from "react";
-import { openCash } from "@/actions/cash/open-cash";
 import { useRouter } from "next/navigation";
+
+import { openCash } from "@/actions/cash/open-cash";
 
 type NightOption = {
   id: string;
   name: string;
+  venueName: string;
+  status: string;
+  date: string;
 };
 
 type OpenCashFormProps = {
@@ -14,42 +18,85 @@ type OpenCashFormProps = {
 };
 
 export function OpenCashForm({ nights }: OpenCashFormProps) {
-  const [nightId, setNightId] = useState(nights[0]?.id || "");
-  const [opening, setOpening] = useState(0);
-  const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [nightId, setNightId] = useState(nights[0]?.id ?? "");
+  const [opening, setOpening] = useState("");
+  const [message, setMessage] = useState("");
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setMessage("");
 
     startTransition(async () => {
-      const res = await openCash({ nightId, opening });
+      const result = await openCash({
+        nightId,
+        opening,
+      });
 
-      if (res.ok) {
+      setMessage(result.message);
+
+      if (result.ok) {
         router.refresh();
-      } else {
-        alert(res.message);
       }
     });
   }
 
+  if (nights.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-zinc-400">
+        No hay jornadas abiertas o planificadas sin caja. Crea una jornada para
+        abrir caja.
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className="space-y-4">
-      <select value={nightId} onChange={(e) => setNightId(e.target.value)}>
-        {nights.map((n) => (
-          <option key={n.id} value={n.id}>
-            {n.name}
-          </option>
-        ))}
-      </select>
+    <form onSubmit={submit} className="space-y-5">
+      <label className="block">
+        <span className="mb-2 block text-sm font-medium text-white">
+          Jornada
+        </span>
+        <select
+          value={nightId}
+          onChange={(event) => setNightId(event.target.value)}
+          className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+        >
+          {nights.map((night) => (
+            <option key={night.id} value={night.id} className="bg-[#111111]">
+              {night.name} - {night.venueName} - {night.status}
+            </option>
+          ))}
+        </select>
+      </label>
 
-      <input
-        type="number"
-        value={opening}
-        onChange={(e) => setOpening(Number(e.target.value))}
-      />
+      <label className="block">
+        <span className="mb-2 block text-sm font-medium text-white">
+          Monto inicial
+        </span>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={opening}
+          onChange={(event) => setOpening(event.target.value)}
+          placeholder="Ej: 50000"
+          className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+        />
+      </label>
 
-      <button type="submit">
+      {message ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-200">
+          {message}
+        </div>
+      ) : null}
+
+      <button
+        type="submit"
+        disabled={isPending || !nightId}
+        className="w-full rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
+      >
         {isPending ? "Abriendo..." : "Abrir caja"}
       </button>
     </form>

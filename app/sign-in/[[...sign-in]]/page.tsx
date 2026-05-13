@@ -22,15 +22,23 @@ export default function Page() {
             Si el login externo no carga en la preview local
           </p>
           <p className="mt-2 text-sm leading-6 text-zinc-300">
-            Podes entrar a una vista visual de Jornadas sin autenticar. Es solo
-            para revisar diseno y flujo, no modifica datos reales.
+            Podes entrar a vistas visuales sin autenticar. Son solo para
+            revisar diseno y flujo, no modifican datos reales.
           </p>
-          <Link
-            href="/preview/jornadas"
-            className="mt-4 inline-flex rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
-          >
-            Ver preview de jornadas
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/preview/jornadas"
+              className="inline-flex rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110"
+            >
+              Ver jornadas
+            </Link>
+            <Link
+              href="/preview/caja"
+              className="inline-flex rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              Ver caja
+            </Link>
+          </div>
         </div>
       </section>
 
