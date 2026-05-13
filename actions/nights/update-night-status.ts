@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
 import {
   updateNightStatusSchema,
   type UpdateNightStatusInput,
@@ -15,6 +18,8 @@ type ActionState =
 export async function updateNightStatus(
   input: UpdateNightStatusInput
 ): Promise<ActionState> {
+  await requireRole(permissions.manageNights);
+
   const parsed = updateNightStatusSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -28,6 +33,9 @@ export async function updateNightStatus(
 
   const night = await prisma.night.findUnique({
     where: { id: nightId },
+    include: {
+      cashBox: true,
+    },
   });
 
   if (!night) {
@@ -37,11 +45,45 @@ export async function updateNightStatus(
     };
   }
 
+  if (night.status === "AUDITED" && status !== "AUDITED") {
+    return {
+      ok: false,
+      message: "La jornada auditada no se puede modificar desde este flujo",
+    };
+  }
+
+  if (status === "AUDITED" && night.status !== "CLOSED") {
+    return {
+      ok: false,
+      message: "Solo se puede auditar una jornada cerrada",
+    };
+  }
+
+  if (status === "CLOSED" && night.cashBox?.status === "OPEN") {
+    return {
+      ok: false,
+      message: "Cerrá la caja antes de cerrar la jornada",
+    };
+  }
+
+  const now = new Date();
+
   await prisma.night.update({
     where: { id: nightId },
     data: {
-      status,
-      closedAt: status === "CLOSED" ? new Date() : night.closedAt,
+      status: status as Prisma.NightUpdateInput["status"],
+      openedAt:
+        status === "OPEN" && !night.openedAt
+          ? now
+          : status === "PLANNED"
+            ? null
+            : night.openedAt,
+      closedAt:
+        status === "CLOSED" || status === "AUDITED"
+          ? night.closedAt ?? now
+          : status === "OPEN" || status === "PLANNED"
+            ? null
+            : night.closedAt,
     },
   });
 
@@ -55,6 +97,6 @@ export async function updateNightStatus(
 
   return {
     ok: true,
-    message: "Estado de la noche actualizado correctamente",
+    message: "Estado de la jornada actualizado correctamente",
   };
 }

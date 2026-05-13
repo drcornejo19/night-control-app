@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { NightStatus } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { getCurrentAppUser, requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
 import {
   createNightSchema,
   type CreateNightInput,
@@ -16,6 +18,8 @@ type ActionState =
 export async function createNight(
   input: CreateNightInput
 ): Promise<ActionState> {
+  await requireRole(permissions.manageNights);
+
   const parsed = createNightSchema.safeParse(input);
 
   if (!parsed.success) {
@@ -25,10 +29,13 @@ export async function createNight(
     };
   }
 
-  const { venueId, name, date, openedAt } = parsed.data;
+  const { venueId, name, date, responsibleUserId, openedAt, openNow, observations } =
+    parsed.data;
+  const currentUser = await getCurrentAppUser();
 
   const venue = await prisma.venue.findUnique({
     where: { id: venueId },
+    select: { id: true },
   });
 
   if (!venue) {
@@ -38,13 +45,29 @@ export async function createNight(
     };
   }
 
+  const responsibleUser = responsibleUserId
+    ? await prisma.user.findUnique({
+        where: { id: responsibleUserId },
+        select: { id: true },
+      })
+    : currentUser
+      ? await prisma.user.findUnique({
+          where: { clerkUserId: currentUser.clerkUserId },
+          select: { id: true },
+        })
+      : null;
+
   await prisma.night.create({
     data: {
       venueId,
+      responsibleUserId: responsibleUser?.id ?? null,
       name,
       date: new Date(date),
-      openedAt: openedAt ? new Date(openedAt) : null,
-      status: NightStatus.OPEN,
+      openedAt: openNow ? (openedAt ? new Date(openedAt) : new Date()) : null,
+      status: (openNow
+        ? "OPEN"
+        : "PLANNED") as Prisma.NightCreateInput["status"],
+      observations: observations || null,
     },
   });
 
@@ -58,6 +81,8 @@ export async function createNight(
 
   return {
     ok: true,
-    message: "Noche creada correctamente",
+    message: openNow
+      ? "Jornada creada y abierta correctamente"
+      : "Jornada planificada correctamente",
   };
 }

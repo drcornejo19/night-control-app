@@ -96,7 +96,7 @@ export function AppSidebar() {
               <div>
                 <p className="text-sm text-zinc-400">Evento</p>
                 <p className="text-base font-semibold text-white">
-                  Sábado Principal
+                  Sabado Principal
                 </p>
               </div>
 

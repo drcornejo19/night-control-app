@@ -4,9 +4,11 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateNightStatus } from "@/actions/nights/update-night-status";
 
+type NightStatus = "PLANNED" | "OPEN" | "CLOSED" | "AUDITED" | "CANCELLED";
+
 type NightStatusButtonProps = {
   nightId: string;
-  currentStatus: "OPEN" | "CLOSED" | "CANCELLED";
+  currentStatus: NightStatus;
 };
 
 export function NightStatusButton({
@@ -16,27 +18,63 @@ export function NightStatusButton({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function handleStatusChange(status: "OPEN" | "CLOSED" | "CANCELLED") {
+  function handleStatusChange(status: NightStatus) {
     startTransition(async () => {
-      await updateNightStatus({
+      const result = await updateNightStatus({
         nightId,
         status,
       });
+
+      if (!result.ok) {
+        alert(result.message);
+        return;
+      }
 
       router.refresh();
     });
   }
 
+  if (currentStatus === "AUDITED") {
+    return (
+      <span className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400">
+        Auditada
+      </span>
+    );
+  }
+
+  if (currentStatus === "PLANNED") {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleStatusChange("OPEN")}
+          className="rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm font-medium text-[#D4AF37]"
+        >
+          {isPending ? "Abriendo..." : "Abrir"}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleStatusChange("CANCELLED")}
+          className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400"
+        >
+          Cancelar
+        </button>
+      </div>
+    );
+  }
+
   if (currentStatus === "OPEN") {
     return (
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={isPending}
           onClick={() => handleStatusChange("CLOSED")}
           className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400"
         >
-          {isPending ? "Actualizando..." : "Cerrar"}
+          {isPending ? "Cerrando..." : "Cerrar"}
         </button>
 
         <button
@@ -53,14 +91,24 @@ export function NightStatusButton({
 
   if (currentStatus === "CLOSED") {
     return (
-      <button
-        type="button"
-        disabled={isPending}
-        onClick={() => handleStatusChange("OPEN")}
-        className="rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm font-medium text-[#D4AF37]"
-      >
-        Reabrir
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleStatusChange("OPEN")}
+          className="rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm font-medium text-[#D4AF37]"
+        >
+          Reabrir
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => handleStatusChange("AUDITED")}
+          className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-400"
+        >
+          Auditar
+        </button>
+      </div>
     );
   }
 
@@ -68,7 +116,7 @@ export function NightStatusButton({
     <button
       type="button"
       disabled={isPending}
-      onClick={() => handleStatusChange("OPEN")}
+      onClick={() => handleStatusChange("PLANNED")}
       className="rounded-xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 px-3 py-2 text-sm font-medium text-[#D4AF37]"
     >
       Reactivar

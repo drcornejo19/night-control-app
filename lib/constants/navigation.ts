@@ -110,3 +110,5 @@ export const navigationItems: NavigationItem[] = [
     roles: ["SUPER_ADMIN", "OWNER"],
   },
 ];
+
+export const sidebarItems = navigationItems;
