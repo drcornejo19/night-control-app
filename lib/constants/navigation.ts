@@ -4,6 +4,7 @@ import {
   CalendarRange,
   LayoutDashboard,
   PackagePlus,
+  BarChart3,
   Receipt,
   ScanLine,
   Scale,
@@ -74,6 +75,12 @@ export const navigationItems: NavigationItem[] = [
     href: "/break-even",
     icon: Scale,
     roles: managerRoles,
+  },
+  {
+    title: "Reportes",
+    href: "/reports",
+    icon: BarChart3,
+    roles: [...managerRoles, "AUDITOR"],
   },
   {
     title: "Caja",
