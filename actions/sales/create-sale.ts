@@ -162,7 +162,7 @@ export async function createSale(
             }
 
             const unitPrice = product.salePrice ?? product.price;
-            const unitCost = product.cost ?? null;
+            const unitCost = product.stock?.averageCost ?? product.cost ?? null;
 
             return {
               productId: item.productId,
@@ -195,14 +195,21 @@ export async function createSale(
         throw new Error("Producto invalido al actualizar stock");
       }
 
+      if (!product.stock) {
+        throw new Error("Stock inexistente al actualizar venta");
+      }
+
+      const averageCost = product.stock.averageCost ?? product.cost ?? 0;
+      const nextQuantity = product.stock.quantity - item.quantity;
+
       await tx.stock.update({
         where: {
           productId: product.id,
         },
         data: {
-          quantity: {
-            decrement: item.quantity,
-          },
+          quantity: nextQuantity,
+          averageCost,
+          stockValue: nextQuantity * averageCost,
         },
       });
 
@@ -213,7 +220,7 @@ export async function createSale(
           productId: product.id,
           type: StockMovementType.SALE,
           quantity: -item.quantity,
-          unitCost: product.cost ?? null,
+          unitCost: averageCost,
           note: `Venta ${sale.id}`,
           createdById: dbUser?.id ?? null,
         },
