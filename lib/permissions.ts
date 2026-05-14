@@ -36,6 +36,7 @@ export const permissions = {
   pos: barRoles,
   salesCreate: barRoles,
   expensesCreate: operatorRoles,
+  manageCosts: managerRoles,
   purchasesCreate: managerRoles,
   cashOpenClose: operatorRoles,
   manageProducts: managerRoles,
