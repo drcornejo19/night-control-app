@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Boxes,
   CalendarRange,
   LayoutDashboard,
   PackagePlus,
@@ -77,6 +78,12 @@ export const navigationItems: NavigationItem[] = [
     title: "Productos",
     href: "/products",
     icon: PackagePlus,
+    roles: managerRoles,
+  },
+  {
+    title: "Stock",
+    href: "/stock",
+    icon: Boxes,
     roles: managerRoles,
   },
   {
