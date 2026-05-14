@@ -1,9 +1,11 @@
-
 "use server";
 
 import { revalidatePath } from "next/cache";
 import { PurchasePaymentStatus, StockMovementType } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
+import { requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
 import {
   createPurchaseSchema,
   type CreatePurchaseInput,
@@ -13,23 +15,36 @@ type ActionState =
   | { ok: true; message: string }
   | { ok: false; message: string };
 
+type AggregatedItem = {
+  quantity: number;
+  totalCost: number;
+};
+
 export async function createPurchase(
   input: CreatePurchaseInput
 ): Promise<ActionState> {
+  const currentUser = await requireRole(permissions.purchasesCreate);
+
   const parsed = createPurchaseSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invalidos",
     };
   }
 
   const { nightId, supplierId, items } = parsed.data;
+  const aggregatedItems = items.reduce((map, item) => {
+    const current = map.get(item.productId) ?? { quantity: 0, totalCost: 0 };
+    current.quantity += item.quantity;
+    current.totalCost += item.quantity * item.cost;
+    map.set(item.productId, current);
+    return map;
+  }, new Map<string, AggregatedItem>());
+  const productIds = Array.from(aggregatedItems.keys());
 
-  const productIds = items.map((item) => item.productId);
-
-  const [supplier, products] = await Promise.all([
+  const [supplier, products, dbUser] = await Promise.all([
     prisma.supplier.findUnique({
       where: { id: supplierId },
     }),
@@ -43,6 +58,10 @@ export async function createPurchase(
         stock: true,
       },
     }),
+    prisma.user.findUnique({
+      where: { clerkUserId: currentUser.clerkUserId },
+      select: { id: true },
+    }),
   ]);
 
   if (!supplier) {
@@ -54,13 +73,20 @@ export async function createPurchase(
 
   const productMap = new Map(products.map((product) => [product.id, product]));
 
-  for (const item of items) {
-    const product = productMap.get(item.productId);
+  for (const productId of productIds) {
+    const product = productMap.get(productId);
 
     if (!product) {
       return {
         ok: false,
         message: "Uno de los productos no existe",
+      };
+    }
+
+    if (product.venueId !== supplier.venueId) {
+      return {
+        ok: false,
+        message: "La compra contiene productos de otra sede",
       };
     }
   }
@@ -87,12 +113,22 @@ export async function createPurchase(
       },
     });
 
-    for (const item of items) {
-      const product = productMap.get(item.productId);
+    for (const [productId, aggregate] of aggregatedItems.entries()) {
+      const product = productMap.get(productId);
 
       if (!product) {
-        throw new Error("Producto invÃ¡lido al actualizar stock");
+        throw new Error("Producto invalido al actualizar stock");
       }
+
+      const purchaseUnitCost = aggregate.totalCost / aggregate.quantity;
+      const currentQuantity = product.stock?.quantity ?? 0;
+      const currentAverageCost =
+        product.stock?.averageCost ?? product.cost ?? purchaseUnitCost;
+      const nextQuantity = currentQuantity + aggregate.quantity;
+      const nextAverageCost =
+        (currentQuantity * currentAverageCost + aggregate.totalCost) /
+        nextQuantity;
+      const nextStockValue = nextQuantity * nextAverageCost;
 
       if (product.stock) {
         await tx.stock.update({
@@ -100,27 +136,37 @@ export async function createPurchase(
             productId: product.id,
           },
           data: {
-            quantity: product.stock.quantity + item.quantity,
+            quantity: nextQuantity,
+            averageCost: nextAverageCost,
+            stockValue: nextStockValue,
           },
         });
       } else {
         await tx.stock.create({
           data: {
             productId: product.id,
-            quantity: item.quantity,
+            quantity: nextQuantity,
             minStock: 0,
+            averageCost: nextAverageCost,
+            stockValue: nextStockValue,
           },
         });
       }
+
+      await tx.product.update({
+        where: { id: product.id },
+        data: { cost: nextAverageCost },
+      });
 
       await tx.stockMovement.create({
         data: {
           venueId: supplier.venueId,
           nightId: nightId || null,
           productId: product.id,
+          createdById: dbUser?.id ?? null,
           type: StockMovementType.PURCHASE,
-          quantity: item.quantity,
-          unitCost: item.cost,
+          quantity: aggregate.quantity,
+          unitCost: purchaseUnitCost,
           note: `Compra ${purchase.id}`,
         },
       });
@@ -128,6 +174,7 @@ export async function createPurchase(
   });
 
   revalidatePath("/purchases");
+  revalidatePath("/products");
   revalidatePath("/stock");
   revalidatePath("/dashboard");
 
