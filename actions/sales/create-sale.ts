@@ -10,13 +10,15 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "@/lib/db";
+import { getCurrentAppUser, requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
 import {
   createSaleSchema,
   type CreateSaleInput,
 } from "@/lib/validations/sales";
 
 type ActionState =
-  | { ok: true; message: string }
+  | { ok: true; message: string; saleId?: string }
   | { ok: false; message: string };
 
 type NightWithCashBox = Prisma.NightGetPayload<{
@@ -30,20 +32,35 @@ type ProductWithStock = Prisma.ProductGetPayload<{
 export async function createSale(
   input: CreateSaleInput
 ): Promise<ActionState> {
+  await requireRole(permissions.salesCreate);
+
   const parsed = createSaleSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invalidos",
     };
   }
 
-  const { nightId, paymentMethod, items } = parsed.data;
+  const { nightId, saleType, paymentMethod, discount, items } = parsed.data;
+  const normalizedItems = Array.from(
+    items
+      .filter((item) => item.productId && item.quantity > 0)
+      .reduce((map, item) => {
+        map.set(item.productId, (map.get(item.productId) ?? 0) + item.quantity);
+        return map;
+      }, new Map<string, number>())
+      .entries()
+  ).map(([productId, quantity]) => ({ productId, quantity }));
 
-  const productIds = items.map((item) => item.productId);
+  if (normalizedItems.length === 0) {
+    return { ok: false, message: "Agrega al menos un producto" };
+  }
 
-  const [nightRaw, productsRaw] = await Promise.all([
+  const productIds = normalizedItems.map((item) => item.productId);
+
+  const [nightRaw, productsRaw, currentUser] = await Promise.all([
     prisma.night.findUnique({
       where: { id: nightId },
       include: { cashBox: true },
@@ -56,28 +73,50 @@ export async function createSale(
         stock: true,
       },
     }),
+    getCurrentAppUser(),
   ]);
 
   const night = nightRaw as NightWithCashBox | null;
   const products = productsRaw as ProductWithStock[];
 
   if (!night) {
-    return { ok: false, message: "La noche no existe" };
+    return { ok: false, message: "La jornada no existe" };
   }
+
+  if (night.status !== "OPEN") {
+    return {
+      ok: false,
+      message: "Solo se pueden registrar ventas en jornadas abiertas",
+    };
+  }
+
+  const dbUser = currentUser
+    ? await prisma.user.findUnique({
+        where: { clerkUserId: currentUser.clerkUserId },
+        select: { id: true },
+      })
+    : null;
 
   const productMap = new Map<string, ProductWithStock>(
     products.map((product) => [product.id, product])
   );
 
-  let total = 0;
+  let subtotal = 0;
 
-  for (const item of items) {
+  for (const item of normalizedItems) {
     const product = productMap.get(item.productId);
 
     if (!product) {
       return {
         ok: false,
         message: "Uno de los productos no existe",
+      };
+    }
+
+    if (!product.active) {
+      return {
+        ok: false,
+        message: `El producto ${product.name} no esta activo`,
       };
     }
 
@@ -97,34 +136,43 @@ export async function createSale(
       };
     }
 
-    total += product.price * item.quantity;
+    const unitPrice = product.salePrice ?? product.price;
+    subtotal += unitPrice * item.quantity;
   }
 
-  await prisma.$transaction(async (tx) => {
-    const createdSale = await tx.sale.create({
+  const safeDiscount = Math.min(discount, subtotal);
+  const total = subtotal - safeDiscount;
+
+  const createdSale = await prisma.$transaction(async (tx) => {
+    const sale = await tx.sale.create({
       data: {
         venueId: night.venueId,
         nightId,
-        type: SaleType.BAR,
-        subtotal: total,
+        userId: dbUser?.id ?? null,
+        type: saleType as SaleType,
+        subtotal,
+        discount: safeDiscount,
         total,
         items: {
-          create: items.map((item) => {
+          create: normalizedItems.map((item) => {
             const product = productMap.get(item.productId);
 
             if (!product) {
-              throw new Error("Producto invÃ¡lido al crear la venta");
+              throw new Error("Producto invalido al crear la venta");
             }
+
+            const unitPrice = product.salePrice ?? product.price;
+            const unitCost = product.cost ?? null;
 
             return {
               productId: item.productId,
               quantity: item.quantity,
-              price: product.price,
-              unitCost: product.cost ?? null,
-              total: product.price * item.quantity,
+              price: unitPrice,
+              unitCost,
+              total: unitPrice * item.quantity,
               grossProfit:
-                product.cost !== null && product.cost !== undefined
-                  ? (product.price - product.cost) * item.quantity
+                unitCost !== null
+                  ? (unitPrice - unitCost) * item.quantity
                   : null,
             };
           }),
@@ -140,17 +188,11 @@ export async function createSale(
       },
     });
 
-    for (const item of items) {
+    for (const item of normalizedItems) {
       const product = productMap.get(item.productId);
 
       if (!product) {
-        throw new Error("Producto invÃ¡lido al actualizar stock");
-      }
-
-      const stock = product.stock;
-
-      if (!stock) {
-        throw new Error(`El producto ${product.name} no tiene stock`);
+        throw new Error("Producto invalido al actualizar stock");
       }
 
       await tx.stock.update({
@@ -158,7 +200,9 @@ export async function createSale(
           productId: product.id,
         },
         data: {
-          quantity: stock.quantity - item.quantity,
+          quantity: {
+            decrement: item.quantity,
+          },
         },
       });
 
@@ -170,32 +214,39 @@ export async function createSale(
           type: StockMovementType.SALE,
           quantity: -item.quantity,
           unitCost: product.cost ?? null,
-          note: `Venta ${createdSale.id}`,
+          note: `Venta ${sale.id}`,
+          createdById: dbUser?.id ?? null,
         },
       });
     }
 
-    if (night.cashBox) {
+    if (night.cashBox?.status === "OPEN" && total > 0) {
       await tx.cashMovement.create({
         data: {
           cashBoxId: night.cashBox.id,
+          userId: dbUser?.id ?? null,
           type: MovementType.INCOME,
-          category: "SALE",
+          category: `Venta ${saleType}`,
           amount: total,
           method: paymentMethod as PaymentMethod,
-          note: `Ingreso por venta ${createdSale.id}`,
+          note: `Ingreso por venta ${sale.id}`,
         },
       });
     }
+
+    return sale;
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/sales");
+  revalidatePath("/sales/new");
   revalidatePath("/stock");
   revalidatePath("/cash");
+  revalidatePath(`/nights/${nightId}`);
 
   return {
     ok: true,
     message: "Venta registrada correctamente",
+    saleId: createdSale.id,
   };
 }

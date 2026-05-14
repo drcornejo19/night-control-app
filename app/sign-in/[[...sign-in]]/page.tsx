@@ -38,6 +38,12 @@ export default function Page() {
             >
               Ver caja
             </Link>
+            <Link
+              href="/preview/ventas"
+              className="inline-flex rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              Ver ventas
+            </Link>
           </div>
         </div>
       </section>

@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
+import { Plus, Trash2 } from "lucide-react";
+
 import { createSale } from "@/actions/sales/create-sale";
+import { formatCurrency } from "@/lib/utils";
 
 type ProductOption = {
   id: string;
@@ -14,6 +23,7 @@ type ProductOption = {
 type NightOption = {
   id: string;
   name: string;
+  venueName?: string;
 };
 
 type Props = {
@@ -27,46 +37,86 @@ type Row = {
 };
 
 type PaymentMethodValue = "CASH" | "TRANSFER" | "CARD" | "QR" | "OTHER";
+type SaleTypeValue = "BAR" | "TICKET" | "VIP" | "TABLE" | "DELIVERY" | "OTHER";
+
+const saleTypes = [
+  { value: "BAR", label: "Barra" },
+  { value: "TICKET", label: "Entrada" },
+  { value: "VIP", label: "VIP" },
+  { value: "TABLE", label: "Mesa" },
+  { value: "DELIVERY", label: "Delivery" },
+  { value: "OTHER", label: "Otro" },
+] as const;
+
+const paymentMethods = [
+  { value: "CASH", label: "Efectivo" },
+  { value: "TRANSFER", label: "Transferencia" },
+  { value: "CARD", label: "Tarjeta" },
+  { value: "QR", label: "QR" },
+  { value: "OTHER", label: "Otro" },
+] as const;
+
+const controlClass =
+  "w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none";
 
 export function NewSaleForm({ nights, products }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [nightId, setNightId] = useState(nights[0]?.id ?? "");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodValue>("CASH");
-  const [rows, setRows] = useState<Row[]>([{ productId: products[0]?.id ?? "", quantity: 1 }]);
+  const [saleType, setSaleType] = useState<SaleTypeValue>("BAR");
+  const [paymentMethod, setPaymentMethod] =
+    useState<PaymentMethodValue>("CASH");
+  const [discount, setDiscount] = useState("");
+  const [rows, setRows] = useState<Row[]>([
+    { productId: products[0]?.id ?? "", quantity: 1 },
+  ]);
   const [message, setMessage] = useState<string>("");
 
-  const total = useMemo(() => {
+  const subtotal = useMemo(() => {
     return rows.reduce((acc, row) => {
-      const product = products.find((p) => p.id === row.productId);
+      const product = products.find((item) => item.id === row.productId);
       if (!product) return acc;
       return acc + product.price * row.quantity;
     }, 0);
   }, [rows, products]);
 
+  const numericDiscount = Math.min(Number(discount) || 0, subtotal);
+  const total = Math.max(0, subtotal - numericDiscount);
+  const canSubmit = Boolean(nightId && products.length > 0 && rows.length > 0);
+
   function updateRow(index: number, patch: Partial<Row>) {
     setRows((prev) =>
-      prev.map((row, i) => (i === index ? { ...row, ...patch } : row))
+      prev.map((row, itemIndex) =>
+        itemIndex === index ? { ...row, ...patch } : row
+      )
     );
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { productId: products[0]?.id ?? "", quantity: 1 }]);
+    setRows((prev) => [
+      ...prev,
+      { productId: products[0]?.id ?? "", quantity: 1 },
+    ]);
   }
 
   function removeRow(index: number) {
-    setRows((prev) => prev.filter((_, i) => i !== index));
+    setRows((prev) => {
+      const next = prev.filter((_, itemIndex) => itemIndex !== index);
+      return next.length > 0 ? next : prev;
+    });
   }
 
-  function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage("");
 
     startTransition(async () => {
       const result = await createSale({
         nightId,
+        saleType,
         paymentMethod,
+        discount,
         items: rows,
       });
 
@@ -79,127 +129,216 @@ export function NewSaleForm({ nights, products }: Props) {
     });
   }
 
+  if (nights.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-zinc-400">
+        No hay jornadas abiertas para registrar ventas. Abri una jornada antes
+        de vender.
+      </div>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-sm text-zinc-400">
+        No hay productos activos con stock para vender.
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <label className="mb-2 block text-sm font-medium text-white">Noche</label>
+      <section className="grid gap-4 md:grid-cols-2">
+        <Field label="Jornada">
           <select
             value={nightId}
-            onChange={(e) => setNightId(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+            onChange={(event) => setNightId(event.target.value)}
+            className={controlClass}
           >
             {nights.map((night) => (
               <option key={night.id} value={night.id}>
                 {night.name}
+                {night.venueName ? ` - ${night.venueName}` : ""}
               </option>
             ))}
           </select>
-        </div>
+        </Field>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <label className="mb-2 block text-sm font-medium text-white">MÃ©todo de pago</label>
+        <Field label="Canal">
+          <select
+            value={saleType}
+            onChange={(event) => setSaleType(event.target.value as SaleTypeValue)}
+            className={controlClass}
+          >
+            {saleTypes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Medio de pago">
           <select
             value={paymentMethod}
-            onChange={(e) =>
-              setPaymentMethod(e.target.value as PaymentMethodValue)
+            onChange={(event) =>
+              setPaymentMethod(event.target.value as PaymentMethodValue)
             }
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
+            className={controlClass}
           >
-            <option value="CASH">Efectivo</option>
-            <option value="TRANSFER">Transferencia</option>
-            <option value="CARD">Tarjeta</option>
-            <option value="QR">QR</option>
-            <option value="OTHER">Otro</option>
+            {paymentMethods.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
-        </div>
-      </div>
+        </Field>
 
-      <div className="space-y-4">
+        <Field label="Descuento">
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={discount}
+            onChange={(event) => setDiscount(event.target.value)}
+            placeholder="0"
+            className={controlClass}
+          />
+        </Field>
+      </section>
+
+      <section className="space-y-4">
         {rows.map((row, index) => {
-          const selected = products.find((p) => p.id === row.productId);
+          const selected = products.find((item) => item.id === row.productId);
+          const lineTotal = selected ? selected.price * row.quantity : 0;
 
           return (
             <div
-              key={index}
-              className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 md:grid-cols-[1fr_140px_100px]"
+              key={`${row.productId}-${index}`}
+              className="rounded-2xl border border-white/10 bg-white/5 p-4"
             >
-              <div>
-                <label className="mb-2 block text-sm font-medium text-white">Producto</label>
-                <select
-                  value={row.productId}
-                  onChange={(e) => updateRow(index, { productId: e.target.value })}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                >
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} â€” Stock: {product.stock} â€” ${product.price}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid gap-4 md:grid-cols-[1fr_120px_44px]">
+                <Field label="Producto">
+                  <select
+                    value={row.productId}
+                    onChange={(event) =>
+                      updateRow(index, { productId: event.target.value })
+                    }
+                    className={controlClass}
+                  >
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} - Stock {product.stock} -{" "}
+                        {formatCurrency(product.price)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Cantidad">
+                  <input
+                    type="number"
+                    min={1}
+                    value={row.quantity}
+                    onChange={(event) =>
+                      updateRow(index, {
+                        quantity: Number(event.target.value) || 1,
+                      })
+                    }
+                    className={controlClass}
+                  />
+                </Field>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => removeRow(index)}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-red-300 transition hover:bg-red-500/15"
+                    aria-label="Quitar producto"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-medium text-white">Cantidad</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={row.quantity}
-                  onChange={(e) =>
-                    updateRow(index, { quantity: Number(e.target.value) || 1 })
-                  }
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-white outline-none"
-                />
-              </div>
-
-              <div className="flex items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => removeRow(index)}
-                  className="w-full rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-400"
-                >
-                  Quitar
-                </button>
-              </div>
-
-              <div className="md:col-span-3">
-                <p className="text-sm text-zinc-400">
-                  {selected ? `Subtotal estimado: $${selected.price * row.quantity}` : "Sin producto"}
-                </p>
-              </div>
+              <p className="mt-3 text-sm text-zinc-400">
+                Subtotal linea: {formatCurrency(lineTotal)}
+              </p>
             </div>
           );
         })}
-      </div>
+      </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 p-4">
-        <button
-          type="button"
-          onClick={addRow}
-          className="rounded-xl border border-white/10 bg-black/30 px-4 py-2 text-sm font-medium text-white"
-        >
-          Agregar producto
-        </button>
+      <section className="rounded-2xl border border-[#D4AF37]/20 bg-[#D4AF37]/10 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={addRow}
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm font-medium text-white transition hover:bg-black/40"
+          >
+            <Plus className="h-4 w-4" />
+            Agregar producto
+          </button>
 
-        <div className="text-right">
-          <p className="text-sm text-zinc-300">Total estimado</p>
-          <p className="text-2xl font-semibold text-white">${total}</p>
+          <div className="grid gap-2 text-right sm:grid-cols-3 sm:text-left">
+            <MiniTotal label="Subtotal" value={formatCurrency(subtotal)} />
+            <MiniTotal label="Descuento" value={formatCurrency(numericDiscount)} />
+            <MiniTotal label="Total" value={formatCurrency(total)} strong />
+          </div>
         </div>
-      </div>
+      </section>
 
       {message ? (
-        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-200">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-200">
           {message}
         </div>
       ) : null}
 
       <button
         type="submit"
-        disabled={isPending}
+        disabled={isPending || !canSubmit}
         className="w-full rounded-2xl bg-[#D4AF37] px-5 py-3 text-sm font-semibold text-black transition hover:brightness-110 disabled:opacity-50"
       >
         {isPending ? "Registrando..." : "Registrar venta"}
       </button>
     </form>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-white">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function MiniTotal({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-zinc-400">{label}</p>
+      <p
+        className={`mt-1 font-semibold ${
+          strong ? "text-xl text-white" : "text-zinc-200"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
   );
 }

@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
 import { prisma } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 import { NewSaleForm } from "@/components/sales/new-sale-form";
@@ -20,15 +23,21 @@ export default async function NewSalePage() {
         venueId: activeVenueId ?? undefined,
         status: "OPEN",
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       select: {
         id: true,
         name: true,
+        venue: {
+          select: {
+            name: true,
+          },
+        },
       },
     }),
     prisma.product.findMany({
       where: {
         venueId: activeVenueId ?? undefined,
+        active: true,
       },
       include: {
         stock: true,
@@ -37,36 +46,48 @@ export default async function NewSalePage() {
     }),
   ]);
 
-  type ProductWithStock = (typeof products)[number];
-
-  const productOptions = products.map((product: ProductWithStock) => ({
+  const productOptions = products.map((product) => ({
     id: product.id,
     name: product.name,
-    price: product.price,
+    price: product.salePrice ?? product.price,
     stock: product.stock?.quantity ?? 0,
+  }));
+
+  const nightOptions = nights.map((night) => ({
+    id: night.id,
+    name: night.name,
+    venueName: night.venue.name,
   }));
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-4xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-sm uppercase tracking-[0.28em] text-[#D4AF37]/80">
+            <Link
+              href="/sales"
+              className="inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Volver a ventas
+            </Link>
+            <p className="mt-5 text-sm uppercase tracking-[0.28em] text-[#D4AF37]/80">
               Ventas
             </p>
             <h1 className="mt-2 text-4xl font-semibold text-white">
-              Nueva venta
+              Nueva venta detallada
             </h1>
-            <p className="mt-2 text-zinc-400">
-              Registrá una venta para el boliche activo.
+            <p className="mt-2 max-w-2xl text-zinc-400">
+              Carga producto por producto, descuenta stock y suma el ingreso a
+              caja si la jornada tiene caja abierta.
             </p>
           </div>
 
           <VenueSwitcher venues={venues} activeVenueId={activeVenueId} />
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-gradient-to-br from-[#131313] to-[#090909] p-6">
-          <NewSaleForm nights={nights} products={productOptions} />
+        <div className="rounded-[28px] border border-white/10 bg-gradient-to-br from-[#131313] to-[#090909] p-5 md:p-6">
+          <NewSaleForm nights={nightOptions} products={productOptions} />
         </div>
       </div>
     </AppShell>
