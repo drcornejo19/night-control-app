@@ -6,6 +6,7 @@ import {
   PackagePlus,
   Receipt,
   ScanLine,
+  Scale,
   ShieldCheck,
   ShoppingCart,
   Truck,
@@ -67,6 +68,12 @@ export const navigationItems: NavigationItem[] = [
     href: "/expenses",
     icon: Receipt,
     roles: operatorRoles,
+  },
+  {
+    title: "Punto equilibrio",
+    href: "/break-even",
+    icon: Scale,
+    roles: managerRoles,
   },
   {
     title: "Caja",
