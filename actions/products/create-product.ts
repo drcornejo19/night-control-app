@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { StockMovementType } from "@prisma/client";
+
 import { prisma } from "@/lib/db";
+import { getCurrentAppUser, requireRole } from "@/lib/auth";
+import { permissions } from "@/lib/permissions";
 import {
   createProductSchema,
   type CreateProductInput,
@@ -15,25 +18,32 @@ type ActionState =
 export async function createProduct(
   input: CreateProductInput
 ): Promise<ActionState> {
+  await requireRole(permissions.manageProducts);
+
   const parsed = createProductSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
       ok: false,
-      message: parsed.error.issues[0]?.message ?? "Datos invÃ¡lidos",
+      message: parsed.error.issues[0]?.message ?? "Datos invalidos",
     };
   }
 
   const { venueId, name, price, cost, initialStock, minStock } = parsed.data;
+  const averageCost = cost ?? 0;
+  const initialStockValue = initialStock * averageCost;
 
-  const venue = await prisma.venue.findUnique({
-    where: { id: venueId },
-  });
+  const [venue, currentUser] = await Promise.all([
+    prisma.venue.findUnique({
+      where: { id: venueId },
+    }),
+    getCurrentAppUser(),
+  ]);
 
   if (!venue) {
     return {
       ok: false,
-      message: "El boliche no existe",
+      message: "La sede no existe",
     };
   }
 
@@ -50,9 +60,16 @@ export async function createProduct(
   if (existing) {
     return {
       ok: false,
-      message: "Ya existe un producto con ese nombre en este boliche",
+      message: "Ya existe un producto con ese nombre en esta sede",
     };
   }
+
+  const dbUser = currentUser
+    ? await prisma.user.findUnique({
+        where: { clerkUserId: currentUser.clerkUserId },
+        select: { id: true },
+      })
+    : null;
 
   await prisma.$transaction(async (tx) => {
     const product = await tx.product.create({
@@ -69,6 +86,8 @@ export async function createProduct(
         productId: product.id,
         quantity: initialStock,
         minStock,
+        averageCost,
+        stockValue: initialStockValue,
       },
     });
 
@@ -81,6 +100,7 @@ export async function createProduct(
           quantity: initialStock,
           unitCost: cost ?? null,
           note: "Stock inicial",
+          createdById: dbUser?.id ?? null,
         },
       });
     }
