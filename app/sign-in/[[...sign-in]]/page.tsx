@@ -50,6 +50,12 @@ export default function Page() {
             >
               Ver stock
             </Link>
+            <Link
+              href="/preview/gastos"
+              className="inline-flex rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              Ver gastos
+            </Link>
           </div>
         </div>
       </section>
