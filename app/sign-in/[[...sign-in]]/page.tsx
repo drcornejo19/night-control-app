@@ -44,6 +44,12 @@ export default function Page() {
             >
               Ver ventas
             </Link>
+            <Link
+              href="/preview/stock"
+              className="inline-flex rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+            >
+              Ver stock
+            </Link>
           </div>
         </div>
       </section>
